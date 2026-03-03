@@ -1,0 +1,31 @@
+# Arch Linux-based Workspace
+FROM archlinux:latest
+
+# Update and install basic tools
+RUN pacman -Syu --noconfirm && \
+    pacman -S --noconfirm \
+    bash \
+    git \
+    vim \
+    nano \
+    curl \
+    wget \
+    base-devel \
+    python \
+    python-pip \
+    nodejs \
+    npm \
+    && pacman -Scc --noconfirm
+
+# Create workspace directory
+WORKDIR /workspace
+
+# Create a non-root user
+RUN useradd -m -s /bin/bash ghostuser && \
+    chown -R ghostuser:ghostuser /workspace
+
+USER ghostuser
+
+ENV SHELL=/bin/bash
+
+CMD ["/bin/bash"]

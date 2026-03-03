@@ -1,0 +1,32 @@
+# Debian-based Workspace
+FROM debian:12-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install basic tools
+RUN apt-get update && apt-get install -y \
+    bash \
+    git \
+    vim \
+    nano \
+    curl \
+    wget \
+    build-essential \
+    python3 \
+    python3-pip \
+    nodejs \
+    npm \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create workspace directory
+WORKDIR /workspace
+
+# Create a non-root user
+RUN useradd -m -s /bin/bash ghostuser && \
+    chown -R ghostuser:ghostuser /workspace
+
+USER ghostuser
+
+ENV SHELL=/bin/bash
+
+CMD ["/bin/bash"]
