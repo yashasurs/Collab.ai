@@ -6,3 +6,6 @@ docker
 requests
 jinja2
 sqlalchemy
+python-jose[cryptography]
+bcrypt
+python-multipart

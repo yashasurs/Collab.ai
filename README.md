@@ -83,8 +83,12 @@ Colab.ai/
 │   │   └── hooks/          # Custom hooks
 │   └── package.json
 ├── backend/                 # FastAPI monolithic backend
-│   ├── main.py              # Entry point & Socket.io
-│   ├── routers/             # API routes (sessions, ai, containers, tunnels)
+│   ├── app/
+│   │   ├── main.py          # Entry point & Socket.io
+│   │   ├── routers/         # API routes (sessions, ai, containers, tunnels)
+│   │   ├── models/          # SQLAlchemy ORM models
+│   │   ├── schemas/         # Pydantic schemas
+│   │   └── database/        # DB engine & session
 │   └── requirements.txt
 ├── docker/
 │   ├── os-images/          # Multiple OS Dockerfiles
@@ -118,7 +122,7 @@ Colab.ai/
 - FastAPI
 - python-socketio
 - Docker SDK for Python
-- SQLite (planned)
+- SQLite
 
 ### Infrastructure
 - Docker (containerization)

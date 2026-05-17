@@ -89,7 +89,7 @@ Colab.ai is a secure collaborative workspace platform that provides:
 - FastAPI
 - python-socketio
 - Docker SDK for Python
-- SQLite (planned)
+- SQLite
 
 ### Infrastructure
 - Docker (containerization)
