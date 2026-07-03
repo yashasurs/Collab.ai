@@ -15,9 +15,17 @@ load_dotenv()
 app = FastAPI(title="Ghost Labs Backend")
 
 # CORS middleware
+origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+]
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url and frontend_url not in origins:
+    origins.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[os.getenv("FRONTEND_URL", "http://localhost:5173")],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -74,7 +82,14 @@ async def handle_join_session(sid, data):
 
 @sio.on("terminal-input")
 async def handle_terminal_input(sid, data):
+    print(f"TERMINAL INPUT: {repr(data)}")
     terminal_manager.write_to_terminal(sid, data)
+
+@sio.on("terminal-resize")
+async def handle_terminal_resize(sid, data):
+    cols = data.get("cols", 80)
+    rows = data.get("rows", 24)
+    terminal_manager.resize_terminal(sid, cols, rows)
 
 @sio.on("editor-change")
 async def handle_editor_change(sid, data):

@@ -78,6 +78,11 @@ class SnapshotContainerRequest(BaseModel):
     description: Optional[str] = None
 
 
+class WriteFileRequest(BaseModel):
+    path: str
+    content: str
+
+
 # ── Tunnel ────────────────────────────────────────────────────────────────────
 
 class CreateTunnelRequest(BaseModel):

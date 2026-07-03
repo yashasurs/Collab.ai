@@ -6,7 +6,7 @@ interface Participant {
   username?: string;
 }
 
-const Participants = ({ sessionId, currentUsername }: { sessionId: string, currentUsername: string }) => {
+const Participants = ({ sessionId }: { sessionId: string }) => {
   const [participants, setParticipants] = useState<Participant[]>([]);
 
   useEffect(() => {

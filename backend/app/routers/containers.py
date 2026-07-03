@@ -3,7 +3,7 @@ import docker
 import uuid
 import logging
 
-from app.schemas.schemas import CreateContainerRequest, ExecCommandRequest, SnapshotContainerRequest
+from app.schemas.schemas import CreateContainerRequest, ExecCommandRequest, SnapshotContainerRequest, WriteFileRequest
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -46,6 +46,11 @@ async def create_container(req: CreateContainerRequest):
             network_mode="bridge",
             labels={"colab.ai": "workspace"},
         )
+        
+        script = '#!/bin/sh\nabs_path=$(readlink -f "$1" 2>/dev/null || echo "$1")\nprintf "\\033]0;EDIT:%s\\007" "$abs_path"\n'
+        cmd = f"cat << 'EOF' > /usr/bin/edit\n{script}EOF\nchmod +x /usr/bin/edit"
+        container.exec_run(["sh", "-c", cmd], user="root")
+
         return {
             "success": True,
             "containerId": container.id,
@@ -168,14 +173,14 @@ async def read_file(container_id: str, path: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{container_id}/files/write")
-async def write_file(container_id: str, path: str, content: str):
+async def write_file(container_id: str, req: WriteFileRequest):
     client = _get_docker()
     try:
         container = client.containers.get(container_id)
         # Use a temporary file to write content and then move it to avoid shell escaping issues with large content
         # For simplicity here, we use a basic echo redirection, but in production we'd use put_archive
-        escaped_content = content.replace("'", "'\\''")
-        cmd = f"printf '%s' '{escaped_content}' > {path}"
+        escaped_content = req.content.replace("'", "'\\''")
+        cmd = f"printf '%s' '{escaped_content}' > {req.path}"
         exit_code, output = container.exec_run(["sh", "-c", cmd])
         if exit_code != 0:
              raise HTTPException(status_code=500, detail=f"Failed to write file: {output.decode()}")

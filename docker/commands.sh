@@ -1,5 +1,5 @@
 # Build the workspace image
-docker build -t ghost-labs-workspace:latest -f docker/workspace/Dockerfile docker/workspace
+docker build -t colab-alpine:latest -f docker/workspace/Dockerfile docker/workspace
 
 # Run the entire stack
 docker-compose up -d

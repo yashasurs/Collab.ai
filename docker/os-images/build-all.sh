@@ -13,16 +13,16 @@ do
     
     if [ "$os" = "alpine" ]; then
         # Alpine uses the original workspace Dockerfile
-        docker build -t ghost-labs-workspace:$os -f ../workspace/Dockerfile ../workspace
+        docker build -t colab-$os:latest -f ../workspace/Dockerfile ../workspace
     else
         # Other OS use their specific Dockerfiles
-        docker build -t ghost-labs-workspace:$os -f Dockerfile.$os .
+        docker build -t colab-$os:latest -f Dockerfile.$os .
     fi
     
     if [ $? -eq 0 ]; then
-        echo "✅ Successfully built ghost-labs-workspace:$os"
+        echo "✅ Successfully built colab-$os:latest"
     else
-        echo "❌ Failed to build ghost-labs-workspace:$os"
+        echo "❌ Failed to build colab-$os:latest"
     fi
     echo ""
 done
@@ -31,4 +31,4 @@ echo "================================="
 echo "Build process complete!"
 echo ""
 echo "Available images:"
-docker images | grep ghost-labs-workspace
+docker images | grep colab-

@@ -38,14 +38,14 @@ const Dashboard = () => {
 
   if (loadingData) {
     return (
-      <div className="flex items-center justify-center min-h-screen w-screen bg-slate-950">
+      <div className="flex items-center justify-center min-h-screen w-full bg-slate-950">
         <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-pink-500 animate-pulse">Loading Dashboard...</h2>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen w-screen flex flex-col bg-slate-950 text-white relative">
+    <div className="min-h-screen w-full flex flex-col bg-slate-950 text-white relative">
       {/* Background gradients */}
       <div className="absolute w-[50vw] h-[50vw] bg-indigo-500/10 blur-[150px] rounded-full top-[-25vw] left-[-25vw] pointer-events-none" />
 

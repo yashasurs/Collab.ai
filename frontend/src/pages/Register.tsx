@@ -32,7 +32,7 @@ const Register = () => {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen w-screen bg-slate-950 p-6 relative overflow-hidden">
+    <div className="flex flex-col items-center justify-center min-h-screen w-full bg-slate-950 p-6 relative overflow-hidden">
       {/* Background gradients */}
       <div className="absolute w-[40vw] h-[40vw] bg-indigo-500/20 blur-[120px] rounded-full top-[-10vw] -right-[10vw] pointer-events-none" />
       <div className="absolute w-[40vw] h-[40vw] bg-pink-500/10 blur-[120px] rounded-full bottom-[-10vw] -left-[10vw] pointer-events-none" />

@@ -6,7 +6,7 @@ from typing import Dict
 class TerminalManager:
     def __init__(self):
         self.client = docker.from_env()
-        self.active_terminals: Dict[str, any] = {} # sid -> socket
+        self.active_terminals: Dict[str, dict] = {} # sid -> {"sock": socket, "exec_id": str}
 
     async def create_terminal_socket(self, container_id: str, sid: str, on_data_cb):
         """
@@ -26,8 +26,9 @@ class TerminalManager:
             
             # Start exec instance and get back a socket
             sock = self.client.api.exec_start(exec_id['Id'], detach=False, tty=True, stream=True, socket=True)
-            self.active_terminals[sid] = sock
+            self.active_terminals[sid] = {"sock": sock, "exec_id": exec_id['Id']}
 
+            loop = asyncio.get_running_loop()
             # Run reading in a separate thread to not block event loop
             def read_from_socket():
                 try:
@@ -38,7 +39,7 @@ class TerminalManager:
                         data = sock.read(4096)
                         if not data:
                             break
-                        asyncio.run_coroutine_threadsafe(on_data_cb(sid, data), asyncio.get_event_loop())
+                        asyncio.run_coroutine_threadsafe(on_data_cb(sid, data), loop)
                 except Exception as e:
                     print(f"Terminal read error for {sid}: {e}")
                 finally:
@@ -53,21 +54,28 @@ class TerminalManager:
     def write_to_terminal(self, sid: str, data: str):
         if sid in self.active_terminals:
             try:
-                self.active_terminals[sid].write(data.encode())
+                sock = self.active_terminals[sid]["sock"]
+                if hasattr(sock, '_sock'):
+                    sock._sock.sendall(data.encode())
+                else:
+                    sock.sendall(data.encode())
             except Exception as e:
                 print(f"Terminal write error for {sid}: {e}")
                 self.close_terminal(sid)
 
     def resize_terminal(self, sid: str, cols: int, rows: int):
-        # Resizing exec instance is tricky since we don't hold the exec ID directly in active_terminals
-        # For simplicity, we might skip this or implement a more complex tracking
-        pass
+        if sid in self.active_terminals:
+            try:
+                exec_id = self.active_terminals[sid]["exec_id"]
+                self.client.api.exec_resize(exec_id, width=cols, height=rows)
+            except Exception as e:
+                print(f"Terminal resize error for {sid}: {e}")
 
     def close_terminal(self, sid: str):
         if sid in self.active_terminals:
-            sock = self.active_terminals.pop(sid)
+            term_info = self.active_terminals.pop(sid)
             try:
-                sock.close()
+                term_info["sock"].close()
             except:
                 pass
 

@@ -36,7 +36,7 @@ const Landing = () => {
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
             <Link to="/register" className="w-full sm:w-auto px-8 py-4 rounded-full bg-white text-slate-950 font-bold text-lg hover:bg-slate-200 transition-all hover:scale-105 shadow-xl shadow-white/10 flex items-center justify-center gap-2">
               Start Building Now
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinelinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
             </Link>
             <a href="#features" className="w-full sm:w-auto px-8 py-4 rounded-full bg-slate-900 border border-slate-700 text-white font-bold text-lg hover:bg-slate-800 transition-all flex items-center justify-center">
               View Features

@@ -7,12 +7,18 @@ import { io, Socket } from 'socket.io-client';
 interface TerminalProps {
   sessionId: string;
   containerId: string;
+  onFileOpen?: (path: string) => void;
 }
 
-const Terminal = ({ sessionId, containerId }: TerminalProps) => {
+const Terminal = ({ sessionId, containerId, onFileOpen }: TerminalProps) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const socketRef = useRef<Socket | null>(null);
+  const onFileOpenRef = useRef(onFileOpen);
+
+  useEffect(() => {
+    onFileOpenRef.current = onFileOpen;
+  }, [onFileOpen]);
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -52,13 +58,26 @@ const Terminal = ({ sessionId, containerId }: TerminalProps) => {
       socket.emit('terminal-input', data);
     });
 
-    const handleResize = () => {
-      fitAddon.fit();
-    };
-    window.addEventListener('resize', handleResize);
+    term.onTitleChange((title) => {
+      if (title.startsWith('EDIT:')) {
+        const path = title.slice(5);
+        if (onFileOpenRef.current) onFileOpenRef.current(path);
+      }
+    });
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (terminalRef.current && terminalRef.current.clientWidth > 0) {
+        fitAddon.fit();
+        socketRef.current?.emit('terminal-resize', { cols: term.cols, rows: term.rows });
+      }
+    });
+
+    if (terminalRef.current) {
+      resizeObserver.observe(terminalRef.current);
+    }
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
       term.dispose();
       socket.disconnect();
     };

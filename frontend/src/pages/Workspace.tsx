@@ -13,8 +13,9 @@ const Workspace = () => {
   const { user } = useAuth();
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
+
   const [fileContent, setFileContent] = useState<string>('');
+  const [currentFile, setCurrentFile] = useState<string>('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -33,29 +34,47 @@ const Workspace = () => {
   }, [sessionId, navigate]);
 
   const handleFileSelect = async (path: string) => {
-    setSelectedFilePath(path);
+
     try {
       const res = await api.get(`/containers/${session.containerId}/files/read`, {
         params: { path }
       });
       if (res.data.success) {
         setFileContent(res.data.content);
+        setCurrentFile(path);
       }
     } catch (err) {
       console.error("Failed to read file:", err);
     }
   };
 
+  const handleSaveFile = async (content: string) => {
+    if (!currentFile || !session?.containerId) return;
+    try {
+      const res = await api.post(`/containers/${session.containerId}/files/write`, {
+        path: currentFile,
+        content: content
+      });
+      if (res.data.success) {
+        // We could add a toast notification here
+        console.log(`Saved ${currentFile}`);
+      }
+    } catch (err) {
+      console.error("Failed to save file:", err);
+      alert("Failed to save file. Check console for details.");
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[100vh] w-screen bg-slate-950">
+      <div className="flex items-center justify-center min-h-[100vh] w-full bg-slate-950">
         <h2 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-pink-500 animate-pulse">Loading Workspace...</h2>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-950 text-white font-sans">
+    <div className="flex flex-col h-screen w-full overflow-hidden bg-slate-950 text-white font-sans">
       {/* Header */}
       <nav className="bg-slate-900 border-b border-white/10 px-6 py-3 flex justify-between items-center z-10 shrink-0 shadow-sm shadow-indigo-900/10">
         <div className="flex items-center gap-4">
@@ -107,7 +126,7 @@ const Workspace = () => {
             <FileBrowser containerId={session?.containerId} onFileSelect={handleFileSelect} />
           </div>
           <div className="p-4 border-t border-white/5 bg-slate-900 shadow-[0_-4px_12px_rgba(0,0,0,0.2)]">
-            <Participants sessionId={sessionId!} currentUsername={user?.username || 'Anonymous'} />
+            <Participants sessionId={sessionId!} />
             <VideoCall sessionId={sessionId!} username={user?.username || 'Anonymous'} />
           </div>
         </aside>
@@ -119,13 +138,13 @@ const Workspace = () => {
           {/* Editor Area */}
           <div className="flex-[2] overflow-hidden p-1 relative z-0">
              <div className="w-full h-full rounded-b-none border-b-0 overflow-hidden shadow-2xl">
-               <CodeEditor sessionId={sessionId!} initialCode={fileContent} />
+               <CodeEditor sessionId={sessionId!} initialCode={fileContent} filePath={currentFile} onSave={handleSaveFile} />
              </div>
           </div>
 
           {/* Terminal Area */}
           <div className="flex-1 border-t-2 border-indigo-500/20 min-h-[250px] relative z-10 bg-[#0a0f1c] p-1 shadow-[0_-10px_30px_rgba(0,0,0,0.3)]">
-             <Terminal sessionId={sessionId!} containerId={session?.containerId} />
+             <Terminal sessionId={sessionId!} containerId={session?.containerId} onFileOpen={handleFileSelect} />
           </div>
         </main>
       </div>
