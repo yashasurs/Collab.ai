@@ -117,9 +117,11 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
-    model: Optional[str] = "gemini-1.5-pro"
+    model: Optional[str] = None
+    provider: Optional[str] = None  # "gemini", "openai", etc. Auto-selects if omitted.
 
 
 class ChatResponse(BaseModel):
     reply: str
     model: str
+    provider: str = "unknown"

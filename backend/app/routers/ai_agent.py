@@ -1,82 +1,63 @@
-import os
+"""
+AI Agent router.
+
+Provider-agnostic AI chat endpoint with automatic fallback.
+Supports multiple AI backends (Gemini, OpenAI, Ollama, etc.).
+"""
+
 import logging
-from fastapi import APIRouter, HTTPException
-import requests
+from fastapi import APIRouter, HTTPException, Depends
+from typing import Optional
 
 from app.schemas.schemas import ChatRequest, ChatResponse
+from app.services.ai import AIMessage
+from app.services.ai.registry import registry
+from app.auth.dependencies import get_current_user
+from app.models.models import User
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-SYSTEM_PROMPT = (
-    "You are an AI coding assistant integrated into Colab.ai, a collaborative Linux lab platform. "
-    "Help users with programming questions, debugging, and shell commands. "
-    "Be concise and practical."
-)
-
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    api_key = os.getenv("GEMINI_API_KEY")
+async def chat(req: ChatRequest, current_user: User = Depends(get_current_user)):
+    """Send a chat message to the AI assistant."""
 
-    if not api_key:
-        # Return a helpful stub response when no key is configured
-        return ChatResponse(
-            reply=(
-                "AI assistant is not configured yet. "
-                "Set the GEMINI_API_KEY environment variable to enable it."
-            ),
-            model="stub",
-        )
+    # Convert request messages to internal format
+    messages = [
+        AIMessage(role=msg.role, content=msg.content)
+        for msg in req.messages
+    ]
 
-    # Convert OpenAI style messages to Gemini style
-    gemini_messages = []
-    for msg in req.messages:
-        role = "model" if msg.role == "assistant" else "user"
-        gemini_messages.append({
-            "role": role,
-            "parts": [{"text": msg.content}]
-        })
+    # Use the provider registry with automatic fallback
+    response = await registry.chat(
+        messages=messages,
+        provider_name=req.provider,
+        model=req.model,
+    )
 
-    model = req.model or "gemini-1.5-pro"
-    url = GEMINI_API_URL.format(model=model, api_key=api_key)
+    return ChatResponse(
+        reply=response.content,
+        model=response.model,
+        provider=response.provider,
+    )
 
-    payload = {
-        "contents": gemini_messages,
-        "systemInstruction": {
-            "parts": [{"text": SYSTEM_PROMPT}]
-        }
+
+@router.get("/providers")
+async def list_providers(current_user: User = Depends(get_current_user)):
+    """List available AI providers and their models."""
+    return {
+        "providers": registry.get_available_providers(),
     }
-
-    try:
-        response = requests.post(
-            url,
-            headers={"Content-Type": "application/json"},
-            json=payload,
-            timeout=30,
-        )
-        response.raise_for_status()
-    except requests.Timeout:
-        raise HTTPException(status_code=504, detail="Gemini API request timed out")
-    except requests.HTTPError as e:
-        raise HTTPException(status_code=502, detail=f"Gemini API error: {e.response.text}")
-    except requests.RequestException as e:
-        raise HTTPException(status_code=502, detail=f"Could not reach Gemini API: {e}")
-
-    data = response.json()
-    try:
-        reply = data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError):
-        raise HTTPException(status_code=502, detail="Unexpected response format from Gemini API")
-
-    return ChatResponse(reply=reply, model=model)
 
 
 @router.get("/")
 async def root():
-    configured = bool(os.getenv("GEMINI_API_KEY"))
+    """AI agent status endpoint."""
+    providers = registry.get_available_providers()
+    any_configured = any(p["available"] for p in providers)
     return {
         "message": "AI Agent router is active",
-        "configured": configured,
+        "configured": any_configured,
+        "providers": providers,
     }
