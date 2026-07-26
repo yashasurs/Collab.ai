@@ -35,7 +35,7 @@ async def get_os_options():
 
 
 @router.post("/create")
-async def create_session(req: CreateSessionRequest, db: DBSession = Depends(get_db)):
+def create_session(req: CreateSessionRequest, db: DBSession = Depends(get_db)):
     session_id = str(uuid.uuid4())
 
     db_session = Session(

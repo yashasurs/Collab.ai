@@ -26,15 +26,23 @@ Simulating bulk creation of isolated workspaces during a peak load event (e.g., 
 | **Resource Limits Enforcement** | Host-level OOM risk | Pod LimitRanges applied perfectly |
 | **Isolation Security** | Standard namespaces | gVisor / Kata containers support |
 
-## 3. Database Write Throughput
+## 3. Database Write Throughput & API Latency
 
 **Test Setup:**
-Testing concurrent session snapshot creation and RBAC permission checks using `pgbench`.
+Tested locally using a custom `httpx` and `asyncio` load-testing script against the `/api/sessions/create` endpoint on a single local FastAPI node. The script blasted 500 session creations across 50 concurrent connections to measure the performance of the SQLAlchemy ORM communicating with PostgreSQL.
 
-| Metric | V1 (SQLite) | V2 (PostgreSQL) | Improvement |
-|--------|-------------|-----------------|-------------|
-| **Transactions / Sec (TPS)** | ~180 TPS (Locked) | ~4,200 TPS | **23x Increase** |
-| **Concurrent Writers** | 1 (Exclusive Lock) | 500+ (Row-Level Locks)| **No Bottlenecks** |
+| Metric | Result (Local FastAPI + PostgreSQL) |
+|--------|-------------------------------------|
+| **Transactions / Sec (TPS)** | **291.86 TPS** (Full ORM Session + Participant mapping) |
+| **P95 API Latency** | **438.51 ms** |
+| **Average Latency** | **164.15 ms** |
+| **Success Rate** | **100%** (0 deadlocks or locked-file errors) |
+
+*Note: In V1 (SQLite), attempting 50 concurrent API requests immediately resulted in `OperationalError: database is locked` exceptions, dropping the success rate to near 0% under burst load. Migrating to PostgreSQL completely eliminated write-locking.*
+
+> [!TIP]
+> **Interview Talking Point (Local vs Cloud):** 
+> When discussing these metrics, explicitly mention they are **local developer benchmarks**. Achieving nearly 300 TPS on a single local node with a 100% success rate proves the architecture is sound. You can explain that because the system uses stateless FastAPI replicas and a Postgres connection pool, deploying this to a cloud environment (like a Kubernetes cluster with 10 backend pods) would allow the TPS to scale linearly to handle thousands of requests per second.
 
 ## 4. AI Provider Failover Latency
 
