@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 import docker
 import uuid
 import logging
 
 from app.schemas.schemas import CreateContainerRequest, ExecCommandRequest, SnapshotContainerRequest, WriteFileRequest
+from app.auth.dependencies import get_current_user
+from app.models.models import User
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -26,7 +28,7 @@ def _get_docker():
 
 
 @router.post("/")
-async def create_container(req: CreateContainerRequest):
+async def create_container(req: CreateContainerRequest, current_user: User = Depends(get_current_user)):
     client = _get_docker()
     image = OS_IMAGE_MAP.get(req.osType or "alpine", DEFAULT_IMAGE)
 

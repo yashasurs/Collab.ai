@@ -32,6 +32,10 @@ config.set_main_option("sqlalchemy.url", database_url)
 # Import all models so Alembic can detect them
 from app.database.database import Base
 from app.models.models import User, Session, Participant, Snapshot  # noqa: F401
+from app.models.rbac import (  # noqa: F401
+    Organization, Team, Role, Permission,
+    UserOrganization, UserTeam, role_permissions,
+)
 
 target_metadata = Base.metadata
 
