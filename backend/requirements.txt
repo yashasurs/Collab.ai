@@ -27,3 +27,7 @@ docker
 # HTTP client
 requests
 httpx
+
+# Testing
+pytest
+pytest-asyncio
