@@ -13,6 +13,8 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
 
 # ---------------------------------------------------------------------------
 # Application lifecycle
@@ -30,11 +32,22 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
 
+    # Startup: verify Redis connectivity
+    from app.core.redis import redis_health_check
+    if await redis_health_check():
+        logger.info("Redis connection verified")
+    else:
+        logger.warning("Redis unavailable — running without cross-replica sync")
+
     yield
 
     # Shutdown: cleanup resources
     terminal_manager.close_all()
     engine.dispose()
+
+    from app.core.redis import close_async_redis
+    await close_async_redis()
+
     logger.info("Application shutdown complete")
 
 
@@ -57,8 +70,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Socket.io setup
-sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
+# ---------------------------------------------------------------------------
+# Socket.io setup — Redis adapter for cross-replica event fan-out
+# ---------------------------------------------------------------------------
+
+_use_redis = bool(REDIS_URL and REDIS_URL != "none")
+
+if _use_redis:
+    try:
+        mgr = socketio.AsyncRedisManager(REDIS_URL)
+        sio = socketio.AsyncServer(
+            async_mode='asgi',
+            cors_allowed_origins='*',
+            client_manager=mgr,
+        )
+        logger.info("Socket.io: using Redis adapter for cross-replica sync")
+    except Exception as e:
+        logger.warning(f"Socket.io Redis adapter failed ({e}), falling back to in-memory")
+        sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
+else:
+    sio = socketio.AsyncServer(async_mode='asgi', cors_allowed_origins='*')
+
 socket_app = socketio.ASGIApp(sio, app)
 
 # Include routers
@@ -69,47 +101,69 @@ app.include_router(tunnels.router, prefix="/api/tunnels", tags=["tunnels"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(snapshots.router, prefix="/api/snapshots", tags=["snapshots"])
 
+
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "message": "Ghost Labs Monolithic API is running"}
+    """Health check endpoint with subsystem status."""
+    from app.core.redis import redis_health_check
 
-# Session participant tracking
-session_participants = {} # sessionId -> [ {sid, username} ]
+    redis_ok = await redis_health_check()
+    db_ok = True
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:
+        db_ok = False
 
-# Socket.io event handlers
+    status = "ok" if (db_ok and redis_ok) else "degraded"
+    return {
+        "status": status,
+        "message": "Colab.ai API is running",
+        "subsystems": {
+            "database": "ok" if db_ok else "error",
+            "redis": "ok" if redis_ok else "error",
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# Socket.io event handlers — participant state now in Redis
+# ---------------------------------------------------------------------------
+
 @sio.event
 async def connect(sid, environ):
-    print(f"Client connected: {sid}")
+    logger.info(f"Client connected: {sid}")
+
 
 @sio.on("join-session")
 async def handle_join_session(sid, data):
+    from app.core.redis import add_participant, get_participants
+
     session_id = data.get("sessionId")
     username = data.get("username", "Anonymous")
     container_id = data.get("containerId")
-    
+
     await sio.enter_room(sid, session_id)
-    
-    # Track participant
-    if session_id not in session_participants:
-        session_participants[session_id] = []
-    
-    # Avoid duplicates if reconnecting
-    session_participants[session_id] = [p for p in session_participants[session_id] if p['sid'] != sid]
-    session_participants[session_id].append({"sid": sid, "username": username})
-    
+
+    # Track participant in Redis
+    await add_participant(session_id, sid, username)
+    participants = await get_participants(session_id)
+
     # Notify everyone in the room about the new participant
-    await sio.emit("participants-update", session_participants[session_id], room=session_id)
+    await sio.emit("participants-update", participants, room=session_id)
     await sio.emit("user-joined-webrtc", sid, room=session_id, skip_sid=sid)
-    
+
     if container_id:
         async def on_terminal_data(target_sid, output_data):
             await sio.emit("terminal-data", output_data.decode(errors='replace'), to=target_sid)
         await terminal_manager.create_terminal_socket(container_id, sid, on_terminal_data)
 
+
 @sio.on("terminal-input")
 async def handle_terminal_input(sid, data):
-    print(f"TERMINAL INPUT: {repr(data)}")
     terminal_manager.write_to_terminal(sid, data)
+
 
 @sio.on("terminal-resize")
 async def handle_terminal_resize(sid, data):
@@ -117,35 +171,42 @@ async def handle_terminal_resize(sid, data):
     rows = data.get("rows", 24)
     terminal_manager.resize_terminal(sid, cols, rows)
 
+
 @sio.on("editor-change")
 async def handle_editor_change(sid, data):
     session_id = data.get("sessionId")
     await sio.emit("editor-sync", data, room=session_id, skip_sid=sid)
+
 
 # WebRTC Signaling
 @sio.on("webrtc-offer")
 async def handle_webrtc_offer(sid, data):
     await sio.emit("webrtc-offer", {"from": sid, "offer": data["offer"]}, to=data["to"])
 
+
 @sio.on("webrtc-answer")
 async def handle_webrtc_answer(sid, data):
     await sio.emit("webrtc-answer", {"from": sid, "answer": data["answer"]}, to=data["to"])
+
 
 @sio.on("webrtc-ice-candidate")
 async def handle_webrtc_ice_candidate(sid, data):
     await sio.emit("webrtc-ice-candidate", {"from": sid, "candidate": data["candidate"]}, to=data["to"])
 
+
 @sio.event
 async def disconnect(sid):
-    print(f"Client disconnected: {sid}")
+    from app.core.redis import remove_participant_globally, get_participants
+
+    logger.info(f"Client disconnected: {sid}")
     terminal_manager.close_terminal(sid)
-    
-    # Remove from participants
-    for session_id, participants in session_participants.items():
-        if any(p['sid'] == sid for p in participants):
-            session_participants[session_id] = [p for p in participants if p['sid'] != sid]
-            await sio.emit("participants-update", session_participants[session_id], room=session_id)
-            break
+
+    # Remove from participants (Redis-backed)
+    session_id = await remove_participant_globally(sid)
+    if session_id:
+        participants = await get_participants(session_id)
+        await sio.emit("participants-update", participants, room=session_id)
+
 
 if __name__ == "__main__":
     import uvicorn

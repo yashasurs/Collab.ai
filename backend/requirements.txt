@@ -16,6 +16,7 @@ bcrypt
 
 # Real-time
 python-socketio
+redis[hiredis]
 
 # Container orchestration
 docker
