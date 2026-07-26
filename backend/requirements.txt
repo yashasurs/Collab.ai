@@ -1,7 +1,10 @@
 # Core framework
 fastapi
 uvicorn[standard]
+# Utilities
 python-dotenv
+python-json-logger
+
 python-multipart
 jinja2
 

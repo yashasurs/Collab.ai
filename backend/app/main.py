@@ -8,9 +8,12 @@ import socketio
 from app.routers import sessions, ai_agent, containers, tunnels, auth, snapshots
 from app.core.terminal_manager import terminal_manager
 from app.database.database import engine, SessionLocal
+from app.core.logging import setup_logging
 
 load_dotenv()
 
+# Initialize structured logging
+setup_logging()
 logger = logging.getLogger(__name__)
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
