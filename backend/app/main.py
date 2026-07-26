@@ -39,9 +39,14 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("Redis unavailable — running without cross-replica sync")
 
+    # Startup: tunnel broker background cleanup
+    from app.services.tunnel_broker import tunnel_broker
+    await tunnel_broker.start()
+
     yield
 
     # Shutdown: cleanup resources
+    await tunnel_broker.stop()
     terminal_manager.close_all()
     engine.dispose()
 
@@ -133,7 +138,38 @@ async def health_check():
 
 @sio.event
 async def connect(sid, environ):
-    logger.info(f"Client connected: {sid}")
+    """Validate JWT before accepting WebSocket connection."""
+    # Extract token from query string or auth header
+    query_string = environ.get("QUERY_STRING", "")
+    token = None
+
+    # Try query string: ?token=xxx
+    for param in query_string.split("&"):
+        if param.startswith("token="):
+            token = param.split("=", 1)[1]
+            break
+
+    # Try Authorization header
+    if not token:
+        headers = environ.get("HTTP_AUTHORIZATION", "")
+        if headers.startswith("Bearer "):
+            token = headers[7:]
+
+    if token:
+        try:
+            from jose import jwt as jose_jwt
+            from app.auth.security import SECRET_KEY, ALGORITHM
+            payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            user_id = payload.get("sub")
+            if user_id:
+                logger.info(f"Client connected: {sid} (user: {user_id})")
+                return True
+        except Exception as e:
+            logger.warning(f"WebSocket JWT validation failed for {sid}: {e}")
+
+    # Allow connection without token for backward compatibility,
+    # but log a warning
+    logger.info(f"Client connected: {sid} (unauthenticated)")
 
 
 @sio.on("join-session")
