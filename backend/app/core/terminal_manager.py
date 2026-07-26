@@ -79,4 +79,9 @@ class TerminalManager:
             except:
                 pass
 
+    def close_all(self):
+        """Close all active terminal sessions (used during shutdown)."""
+        for sid in list(self.active_terminals.keys()):
+            self.close_terminal(sid)
+
 terminal_manager = TerminalManager()

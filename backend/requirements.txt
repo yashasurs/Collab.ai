@@ -1,11 +1,25 @@
+# Core framework
 fastapi
-uvicorn
-python-socketio
+uvicorn[standard]
 python-dotenv
-docker
-requests
+python-multipart
 jinja2
+
+# Database
 sqlalchemy
+psycopg2-binary
+alembic
+
+# Authentication
 python-jose[cryptography]
 bcrypt
-python-multipart
+
+# Real-time
+python-socketio
+
+# Container orchestration
+docker
+
+# HTTP client
+requests
+httpx

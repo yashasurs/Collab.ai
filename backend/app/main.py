@@ -1,18 +1,44 @@
 import os
+import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import socketio
 from app.routers import sessions, ai_agent, containers, tunnels, auth, snapshots
 from app.core.terminal_manager import terminal_manager
-from app.database.database import engine
-from app.models.models import Base
-
-Base.metadata.create_all(bind=engine)
+from app.database.database import engine, SessionLocal
 
 load_dotenv()
 
-app = FastAPI(title="Ghost Labs Backend")
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Application lifecycle
+# ---------------------------------------------------------------------------
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown lifecycle events."""
+    # Startup: verify database connectivity
+    try:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("Database connection verified")
+    except Exception as e:
+        logger.error(f"Database connection failed: {e}")
+
+    yield
+
+    # Shutdown: cleanup resources
+    terminal_manager.close_all()
+    engine.dispose()
+    logger.info("Application shutdown complete")
+
+
+app = FastAPI(title="Colab.ai Backend", lifespan=lifespan)
 
 # CORS middleware
 origins = [
