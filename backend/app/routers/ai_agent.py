@@ -1,8 +1,8 @@
 """
 AI Agent router.
 
-Provider-agnostic AI chat endpoint with automatic fallback.
-Supports multiple AI backends (Gemini, OpenAI, Ollama, etc.).
+LangChain-powered AI chat endpoint with automatic provider fallback.
+Supports Google Gemini, OpenAI, and any OpenAI-compatible endpoint (Ollama, vLLM, etc.).
 """
 
 import logging

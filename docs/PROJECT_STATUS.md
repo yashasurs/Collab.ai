@@ -23,8 +23,8 @@ The project follows a standard monolithic backend with a decoupled single-page a
   * **REST API & WebSockets:** Built on **FastAPI** and `python-socketio`, the backend efficiently handles standard HTTP requests (auth, tunnel creation, session management) alongside real-time WebSocket streams for terminal multiplexing.
   * **Container Management:** Uses the **Python Docker SDK** to dynamically provision, manage, and isolate Linux containers for each user session.
   * **Secure Tunneling:** Integrates with **cloudflared** to dynamically expose local container ports to public `trycloudflare.com` URLs. This enables users to share their local sessions over the internet securely without complex network configuration.
-  * **Authentication:** Implements **JWT-based authentication** with SQLite and SQLAlchemy to handle user registration and login securely.
-  * **AI Assistant:** Features an AI coding assistant powered by the **Gemini API** (`gemini-1.5-pro`). It assists users with programming questions, debugging, and shell commands.
+  * **Authentication:** Implements **JWT-based authentication** with bcrypt password hashing via `python-jose` and `bcrypt`. Supports user registration, login, and token-protected endpoints.
+  * **AI Assistant:** Features an AI coding assistant with a **multi-provider architecture**. The `ProviderRegistry` supports Google Gemini (default: `gemini-2.0-flash`) and OpenAI-compatible APIs (GPT-4o, etc.) with automatic failover if the primary provider is down.
   * **Snapshots (State Persistence):** Allows users to save the current state of their workspace container as a new Docker image using Docker's commit functionality. This enables pausing and resuming environments seamlessly.
 
 ### Code Organization
@@ -38,24 +38,24 @@ The project follows a standard monolithic backend with a decoupled single-page a
 
 Based on the current state of the codebase, the following features and improvements are either missing, partially implemented, or planned for the future:
 
-1. **Advanced Role-Based Access Control (RBAC):**
-   * While basic JWT authentication exists, the system lacks advanced team and role management (e.g., distinguishing permissions between a Team Lead, a Core Developer, and an External Contributor).
+1. **Advanced Role-Based Access Control (RBAC) — Enforcement:**
+   * The data model exists (Organization → Team → Role → Permission) with SQLAlchemy models and association tables. The `RBACService` class and FastAPI dependency factories (`require_role`, `require_session_access`) are implemented but **enforcement is deferred** — they currently return the authenticated user without checking roles. API endpoints for managing organizations, teams, and role assignments are not yet built.
 
 2. **Multi-Container Sessions:**
    * Currently, a single session maps directly to a single Docker container. Supporting multi-container networks (e.g., integrating `docker-compose` equivalents within a single session) would allow for more complex, multi-tier project environments.
 
-3. **Robust Container Lifecycle Management:**
-   * **Automatic Cleanup:** There is a need for background tasks to automatically detect and clean up dormant containers and orphaned cloudflared tunnels to prevent resource leaks.
-   * **Resource Quotas:** While mentioned in the architecture design, strict enforcement of CPU and memory limits per container needs robust implementation to prevent abuse in a multi-tenant setup.
+3. ~~**Robust Container Lifecycle Management:**~~ ✅ **Implemented**
+   * ~~Automatic Cleanup~~ → `TunnelBroker` background cleanup loop reaps idle tunnels (30-min timeout) and dead processes every 60s.
+   * ~~Resource Quotas~~ → `DockerOrchestrator` enforces `mem_limit=512m` and `cpu_quota=50000` per container. Per-user tunnel quotas (default 3) are enforced via Redis.
 
 4. **Persistent Cloud Storage Integration:**
    * Workspace state is currently saved via Docker Snapshots (committing the container to an image). Abstracting user files to persistent volumes or cloud storage (e.g., AWS S3 or EFS) independent of the container image would provide more efficient and reliable long-term file persistence.
 
-5. **Comprehensive Test Suite:**
-   * The project currently relies on basic interactive/socketio tests. A comprehensive suite of unit, integration, and end-to-end tests covering both frontend components and backend routers is necessary for production readiness.
+5. ~~**Comprehensive Test Suite:**~~ ✅ **Implemented**
+   * The project now has a full `pytest` test suite with 7 test files covering: sessions, auth, containers, AI agent, tunnel broker, and RBAC.
 
 6. **End-to-End WebSocket Security:**
-   * Ensuring that WebSocket channels are fully secured by mapping active JWT tokens prior to establishing the connection and broadcasting terminal I/O, preventing unauthorized access to active sessions.
+   * WebSocket `connect` handler validates JWT from query string or Authorization header, but currently **allows unauthenticated connections** with a warning log for backward compatibility. This should be tightened to reject connections without valid tokens.
 
 7. **CI/CD Pipelines:**
    * Implementing automated pipelines (e.g., GitHub Actions) for linting, testing, Docker image building, and deployment is needed to streamline the development workflow.

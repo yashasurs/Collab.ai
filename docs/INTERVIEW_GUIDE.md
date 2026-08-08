@@ -21,8 +21,8 @@ This document provides an exhaustive, deep-technical understanding of every comp
     *   *Reasoning:* Cost and Latency. A centralized media server (MCU/SFU) requires massive bandwidth to route video frames. WebRTC allows true Peer-to-Peer (P2P) connections. The FastAPI server acts *only* as a lightweight signaling server to exchange initial connection data (SDP/ICE candidates); the heavy video streams flow directly between users' browsers locally.
 *   **Why Cloudflare Tunnels (`cloudflared`) instead of dynamically opening ports?**
     *   *Reasoning:* Security and infrastructure simplicity. If a user runs a React app on port 3000 inside their container, opening host firewall ports dynamically for every user is an immense security risk and requires complex reverse-proxy rules. `cloudflared` solves this elegantly by establishing an outbound connection to Cloudflare's edge, giving us a secure, ephemeral HTTPS URL (`*.trycloudflare.com`) pointing directly to `localhost` inside the container.
-*   **Why SQLite and a Monolithic Architecture (Initially)?**
-    *   *Reasoning:* For an MVP, a monolith guarantees speed of development by reducing deployment complexity. SQLite is zero-configuration. In a production environment, this would instantly be swapped to PostgreSQL, and the Docker provisioner could be migrated to Kubernetes, but keeping it simple for V1 minimizes the surface area for bugs.
+*   **Why did V1 start with SQLite, and why did you migrate to PostgreSQL?**
+    *   *Reasoning:* For the MVP, SQLite was zero-configuration and reduced deployment complexity. However, SQLite locks the entire database file during writes, creating a massive bottleneck under concurrent user load. V2 migrated to **PostgreSQL** with connection pooling (`pool_size=20`, `max_overflow=10`) and added **Alembic** for schema migrations. SQLite remains as a local dev fallback.
 
 ---
 
@@ -31,7 +31,7 @@ This document provides an exhaustive, deep-technical understanding of every comp
 ### A. The Container Orchestration Engine
 **"How do you spin up machines for users safely?"**
 1.  **Request Flow:** User clicks "Launch Ubuntu". A REST POST request hits the backend `/sessions/create`.
-2.  **SDK Execution:** The backend uses `docker.api.create_container()` mapped to a pre-built base image.
+2.  **Orchestrator Execution:** The backend calls `orchestrator.create(image="ubuntu")` via the abstract `ContainerOrchestrator` interface. The `DockerOrchestrator` resolves the image name to `colab-ubuntu:latest` and calls `self._client.containers.run()` with resource limits.
 3.  **Strict Limits:** The container is restricted via parameters: `mem_limit="512m"` and `cpu_quota=50000` (meaning a hard cap of 50% of 1 CPU core). This prevents "noisy neighbor" issues where one user's infinite loop could crash the entire host server.
 4.  **Network Isolation:** Containers are placed on an isolated bridge network, preventing them from accessing the host's internal ports or metadata.
 5.  **Filesystem Access:** We do not mount host volumes. All file read/write operations from the frontend File Browser trigger lightweight `docker exec` commands (e.g., `cat /path/to/file` or `mkdir`). This ensures the container OS is completely ephemeral and strictly contained.
@@ -59,10 +59,12 @@ This document provides an exhaustive, deep-technical understanding of every comp
     *   User B receives it, sets `RemoteDescription`, generates an Answer, and sends it back.
     *   Both browsers begin emitting ICE Candidates (potential network routing paths), which the server relays back and forth until a direct UDP connection clicks.
 
-### D. Subprocess Management (Tunnels)
-*   When a tunnel is requested, Python's `subprocess.Popen` launches the `cloudflared` executable natively on the host.
-*   We use Python's `threading` and non-blocking I/O to read the `stderr` of the cloudflared process until we capture the regex matching `https://.*\.trycloudflare\.com`.
-*   The `Popen` object reference is stored in a dictionary in memory alongside the Session ID so we can gracefully issue a `SIGTERM`/`kill()` when the user deletes the session, preventing zombie processes.
+### D. Tunnel Broker Service
+*   When a tunnel is requested, the `TunnelBroker` service uses `subprocess.Popen` to launch `cloudflared tunnel --url http://localhost:{port}` natively on the host.
+*   The broker reads `stdout` (stderr is redirected to stdout via `stderr=subprocess.STDOUT`) line by line, matching the regex `https://[a-z0-9\-]+\.trycloudflare\.com` to capture the tunnel URL.
+*   The `Popen` object is stored in `self._local_processes[session_id]`. Tunnel metadata (URL, timestamps, PID) is also persisted to **Redis** for cross-replica visibility.
+*   A background `asyncio` cleanup loop runs every 60 seconds, checking for dead processes and idle tunnels (configurable via `TUNNEL_IDLE_TIMEOUT`, default 30 minutes).
+*   Per-user tunnel quotas (`MAX_TUNNELS_PER_USER`, default 3) are enforced via Redis Sets, returning HTTP 429 on quota exhaustion.
 
 ### E. Stateful Snapshots
 *   We utilize Docker's `commit` functionality. Just like `git commit`, running `docker.api.commit(container_id)` pauses the container, calculates the filesystem diff against its base image, and squashes it into a new, static image.
@@ -80,13 +82,14 @@ This document provides an exhaustive, deep-technical understanding of every comp
 
 ---
 
-## 5. How Would You Scale This? (System Design Question)
-**"This architecture is highly monolithic. If this blew up and got 100,000 active users overnight, how would you re-architect it?"**
+## 5. How Did You Scale This? (System Design Question)
+**"This architecture was highly monolithic in V1. What did you do to make it production-ready?"**
 
-*   **Compute Orchestration:** A single Docker host cannot handle 100,000 continuous containers. I would migrate the container orchestration from raw Docker API to **Kubernetes (K8s)**. Each user workspace would become a lightweight K8s Pod managed by a dynamically scaling Node Group on AWS (EKS) or GCP (GKE).
-*   **WebSockets & Real-Time Sync:** A single FastAPI instance can't hold 100k open TCP sockets. I would deploy multiple stateless FastAPI load-balanced instances and introduce a **Redis Pub/Sub backplane**. If User A is connected to Node 1, and User B is on Node 2, Node 1 publishes the editor changes to Redis, and Redis instantly pushes it to Node 2 to distribute to User B.
-*   **Database:** Migrate the SQLite database to **PostgreSQL** hosted on AWS RDS or AWS Aurora for robust connection pooling, automatic failover, and read replicas.
-*   **Editor Sync Algorithm:** Upgrade from simple string-replacement broadcasting to using **Operational Transformation (OT)** or **CRDTs (Conflict-free Replicated Data Types)** via a library like `Yjs`. This ensures that if multiple users type on the exact same line at the exact same millisecond with high latency, the operations merge perfectly without clobbering each other.
+*   **Compute Orchestration (Implemented):** The container orchestration was abstracted behind a `ContainerOrchestrator` interface with a factory pattern. Developers use `DockerOrchestrator` locally; production uses `KubernetesOrchestrator` to schedule user sessions as Pods across a cluster with resource limits, network policies, and optional gVisor/Kata runtimes.
+*   **WebSockets & Real-Time Sync (Implemented):** Socket.io was upgraded to use `socketio.AsyncRedisManager` for cross-replica event fan-out. Multiple stateless FastAPI instances can now run behind a load balancer with session participant state tracked in Redis Hashes.
+*   **Database (Implemented):** SQLite was migrated to **PostgreSQL** with SQLAlchemy connection pooling (`pool_size=20`, `max_overflow=10`, `pool_pre_ping=True`) and Alembic for schema migrations. SQLite remains as a zero-configuration local dev fallback.
+*   **AI Resilience (Implemented):** The original custom REST integration was completely refactored to use **LangChain**. We leverage LangChain's unified `ChatModel` interface and `with_fallbacks()` capability to seamlessly chain Google Gemini and OpenAI-compatible endpoints, ensuring automatic failover if the primary provider drops.
+*   **Remaining Future Work:** Upgrade the code editor sync from simple string-replacement broadcasting to **CRDTs (Conflict-free Replicated Data Types)** via a library like `Yjs`. This would ensure that if multiple users type on the exact same line at the exact same millisecond with high latency, the operations merge perfectly without clobbering each other.
 
 ---
 
@@ -96,7 +99,7 @@ This document provides an exhaustive, deep-technical understanding of every comp
 *A:* "Containers are deeply isolated via Linux namespaces and control groups (cgroups). They do not share a network bridge with the host backend or the database. Even if a user gains root within the container, they only have root access to that ephemeral, sandbox OS. The strict memory and CPU quotas prevent them from executing denial-of-service attacks like fork bombs against the host machine."
 
 **Q: Explain how you implemented the AI coding assistant.**
-*A:* "I integrated the Google Gemini API. When a user asks a question, the frontend intercepts it and bundles it with the *current codebase context*—grabbing the raw text of the active file from Monaco Editor. The backend securely signs the request and constructs a prompt using a strict System Persona (e.g., 'You are an expert pair programmer'). The response is streamed back via WebSockets to give the user that low-latency, ChatGPT-like typing effect right in the UI."
+*A:* "I used **LangChain** to build a robust, multi-provider AI backend. When a user asks a question, the frontend intercepts it and bundles it with the *current codebase context* from Monaco Editor. The backend securely signs the request and routes it through LangChain (e.g., `ChatGoogleGenerativeAI` or `ChatOpenAI`) using a strict System Persona. By leveraging LangChain's `with_fallbacks()`, the system is highly resilient—if Gemini times out, it automatically fails over to an OpenAI-compatible endpoint without failing the user's request."
 
 **Q: Why use `bcrypt` for authentication over something custom?**
 *A:* "`bcrypt` is the industry standard for password hashing because it natively incorporates a cryptographic salt and a configurable work factor (cost). This makes it inherently resistant to dictionary attacks, rainbow table matching, and hardware-accelerated brute forcing via GPUs."

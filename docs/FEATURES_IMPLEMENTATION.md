@@ -5,10 +5,10 @@ This document provides an in-depth look at how each core feature of Colab.ai is 
 ## 1. Instant OS Labs (Container Management)
 **Goal:** Provide users with isolated, fast-booting Linux environments.
 
-**Backend Implementation (`backend/app/routers/containers.py`):**
-- Utilizes the `docker` Python SDK to interact with the host's Docker daemon.
-- When a user requests a session with a specific OS (Alpine, Ubuntu, Debian, Fedora, Arch), the backend maps the OS choice to a pre-built Docker image (defined in `docker/os-images/`).
-- The container is spun up with specific constraints: `mem_limit="512m"` and `cpu_quota=50000` (equivalent to 0.5 CPU) to ensure resource isolation.
+**Backend Implementation (`backend/app/services/orchestrator/`):**
+- All container operations go through the abstract `ContainerOrchestrator` interface, making the backend agnostic to whether Docker or Kubernetes is in use.
+- The `DockerOrchestrator` maps the OS choice to a pre-built Docker image (e.g., `ubuntu` → `colab-ubuntu:latest` defined in `docker/os-images/`).
+- The container is spun up via `self._client.containers.run()` with specific constraints: `mem_limit="512m"` and `cpu_quota=50000` (equivalent to 0.5 CPU) to ensure resource isolation.
 - File browsing and reading/writing are implemented by executing `sh` commands (`ls -F`, `cat`, `printf`) inside the running container using `container.exec_run()`.
 
 **Frontend Implementation:**
@@ -62,7 +62,9 @@ This document provides an in-depth look at how each core feature of Colab.ai is 
 ## 6. AI Pair Programming
 **Goal:** Provide intelligent contextual coding help.
 
-**Backend Implementation (`backend/app/routers/ai_agent.py`):**
-- Connects to Google's Gemini API (`generativelanguage.googleapis.com`).
-- Accepts a conversation history and safely formats it into the Gemini format.
-- A system prompt guides the AI to behave as a concise coding assistant.
+**Backend Implementation (`backend/app/services/ai/`):**
+**Backend Implementation (`backend/app/services/ai/`):**
+- Uses **LangChain** to provide a unified `ChatModel` interface across multiple AI backends.
+- **Google Gemini** (default: `gemini-2.0-flash`): Integrated via `ChatGoogleGenerativeAI`.
+- **OpenAI-compatible** (GPT-4o, etc.): Integrated via `ChatOpenAI`, supporting any OpenAI-compatible endpoint (Ollama, LM Studio, vLLM) via `OPENAI_BASE_URL`.
+- **Automatic Failover:** Uses LangChain's built-in `with_fallbacks()` method. If the primary provider fails (e.g., API timeout or error), the request automatically chains to the next configured fallback provider without writing complex manual retry logic.

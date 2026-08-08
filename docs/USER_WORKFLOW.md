@@ -25,7 +25,7 @@ This document provides a step-by-step description of how a user interacts with t
 3. **Boot Sequence:** 
     - The frontend sends a `POST /sessions/create` request.
     - The backend interacts with the Docker daemon to boot an isolated Linux container with the requested image.
-    - The container ID is linked to the newly minted Session in the SQLite database.
+    - The container ID is linked to the newly minted Session in the database (PostgreSQL in production, SQLite in local dev fallback).
 4. **Transition:** The user is routed to `/workspace/${sessionId}`.
 
 ## 4. The Collaborative Workspace IDE

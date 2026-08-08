@@ -26,7 +26,11 @@ docker
 
 # HTTP client
 requests
-httpx
+
+# AI (LangChain)
+langchain-core
+langchain-google-genai
+langchain-openai
 
 # Testing
 pytest
