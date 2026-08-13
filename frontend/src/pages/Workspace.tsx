@@ -7,6 +7,7 @@ import FileBrowser from '../components/FileBrowser';
 import api from '../api';
 import Participants from '../components/Participants';
 import VideoCall from '../components/VideoCall';
+import AIChat from '../components/AIChat';
 
 const Workspace = () => {
   const { sessionId } = useParams();
@@ -16,6 +17,7 @@ const Workspace = () => {
 
   const [fileContent, setFileContent] = useState<string>('');
   const [currentFile, setCurrentFile] = useState<string>('');
+  const [isAiChatOpen, setIsAiChatOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -91,6 +93,13 @@ const Workspace = () => {
         <div className="flex items-center gap-4">
           <span className="text-slate-400 text-sm font-medium hidden sm:block">{user?.username}</span>
           <button 
+            onClick={() => setIsAiChatOpen(!isAiChatOpen)}
+            className={`px-3 py-1.5 text-sm rounded-lg font-semibold transition-colors flex items-center gap-2 ${isAiChatOpen ? 'bg-pink-500 text-white shadow-sm shadow-pink-500/20' : 'bg-pink-500/10 text-pink-400 hover:bg-pink-500/20 border border-pink-500/20'}`}
+          >
+            <span className={`w-2 h-2 rounded-full ${isAiChatOpen ? 'bg-white' : 'bg-pink-500 animate-pulse'}`}></span>
+            AI Chat
+          </button>
+          <button 
             onClick={async () => {
               const name = prompt("Enter snapshot name:", `Snapshot ${new Date().toLocaleString()}`);
               if (!name) return;
@@ -147,6 +156,13 @@ const Workspace = () => {
              <Terminal sessionId={sessionId!} containerId={session?.containerId} onFileOpen={handleFileSelect} />
           </div>
         </main>
+
+        {/* Right Sidebar: AI Chat */}
+        <aside className={`bg-slate-900/50 flex-shrink-0 flex flex-col border-white/5 shadow-2xl z-10 transition-all duration-300 ease-in-out ${isAiChatOpen ? 'w-80 border-l opacity-100' : 'w-0 border-none opacity-0 overflow-hidden'}`}>
+          <div className="w-80 h-full flex flex-col">
+            <AIChat activeFileName={currentFile} activeFileContent={fileContent} />
+          </div>
+        </aside>
       </div>
     </div>
   );
