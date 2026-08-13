@@ -4,13 +4,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+
+load_dotenv()
+
 import socketio
 from app.routers import sessions, ai_agent, containers, tunnels, auth, snapshots
 from app.core.terminal_manager import terminal_manager
 from app.database.database import engine, SessionLocal
 from app.core.logging import setup_logging
-
-load_dotenv()
 
 # Initialize structured logging
 setup_logging()

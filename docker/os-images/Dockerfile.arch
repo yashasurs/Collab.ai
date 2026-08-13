@@ -15,13 +15,15 @@ RUN pacman -Syu --noconfirm && \
     python-pip \
     nodejs \
     npm \
+    sudo \
     && pacman -Scc --noconfirm
 
 # Create workspace directory
 WORKDIR /workspace
 
-# Create a non-root user
+# Create a non-root user with passwordless sudo
 RUN useradd -m -s /bin/bash ghostuser && \
+    echo "ghostuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     chown -R ghostuser:ghostuser /workspace
 
 USER ghostuser

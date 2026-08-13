@@ -40,7 +40,7 @@ const Terminal = ({ sessionId, containerId, onFileOpen }: TerminalProps) => {
     xtermRef.current = term;
 
     // Connect to Socket.io
-    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:8000', {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || '', {
         transports: ['websocket'],
     });
     socketRef.current = socket;

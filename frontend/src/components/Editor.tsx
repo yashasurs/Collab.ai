@@ -52,7 +52,7 @@ const CodeEditor = ({ sessionId, initialCode = '', filePath = '', onSave }: Code
   }, [filePath]);
 
   useEffect(() => {
-    const socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:8000', {
+    const socket = io(import.meta.env.VITE_SOCKET_URL || '', {
         transports: ['websocket'],
     });
     socketRef.current = socket;
@@ -143,6 +143,7 @@ const CodeEditor = ({ sessionId, initialCode = '', filePath = '', onSave }: Code
             fontSize: 14,
             scrollBeyondLastLine: false,
             automaticLayout: true,
+            wordWrap: 'on',
           }}
         />
       </div>

@@ -10,7 +10,7 @@ const Participants = ({ sessionId }: { sessionId: string }) => {
   const [participants, setParticipants] = useState<Participant[]>([]);
 
   useEffect(() => {
-    const socket = socketio(import.meta.env.VITE_SOCKET_URL || 'http://localhost:8000', {
+    const socket = socketio(import.meta.env.VITE_SOCKET_URL || '', {
       query: { sessionId }
     });
 

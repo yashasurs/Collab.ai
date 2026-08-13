@@ -12,7 +12,7 @@ const VideoCall = ({ sessionId, username }: { sessionId: string, username: strin
       const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setStream(s);
 
-      socketRef.current = socketio(import.meta.env.VITE_SOCKET_URL || 'http://localhost:8000', {
+      socketRef.current = socketio(import.meta.env.VITE_SOCKET_URL || '', {
         query: { sessionId, username }
       });
 

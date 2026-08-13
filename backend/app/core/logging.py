@@ -50,7 +50,7 @@ def setup_logging():
     root_logger.addHandler(handler)
     
     # Silence noisy loggers
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("watchfiles").setLevel(logging.WARNING)
     logging.getLogger("engineio").setLevel(logging.WARNING)
     logging.getLogger("socketio").setLevel(logging.WARNING)

@@ -14,13 +14,15 @@ RUN apk add --no-cache \
     py3-pip \
     gcc \
     g++ \
-    make
+    make \
+    sudo
 
 # Create workspace directory
 WORKDIR /workspace
 
-# Create a non-root user
+# Create a non-root user with passwordless sudo
 RUN adduser -D -h /workspace ghostuser && \
+    echo "ghostuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     chown -R ghostuser:ghostuser /workspace
 
 USER ghostuser

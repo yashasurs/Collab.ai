@@ -132,7 +132,7 @@ const Workspace = () => {
         </aside>
 
         {/* Main Content: Split Editor and Terminal */}
-        <main className="flex-1 flex flex-col overflow-hidden relative">
+        <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
           <div className="absolute inset-0 bg-indigo-500/5 pointer-events-none blur-3xl opacity-30"></div>
           
           {/* Editor Area */}

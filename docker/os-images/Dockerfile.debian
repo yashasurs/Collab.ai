@@ -16,13 +16,15 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     nodejs \
     npm \
+    sudo \
     && rm -rf /var/lib/apt/lists/*
 
 # Create workspace directory
 WORKDIR /workspace
 
-# Create a non-root user
+# Create a non-root user with passwordless sudo
 RUN useradd -m -s /bin/bash ghostuser && \
+    echo "ghostuser ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     chown -R ghostuser:ghostuser /workspace
 
 USER ghostuser

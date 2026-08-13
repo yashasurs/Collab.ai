@@ -8,3 +8,5 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
+// CACHE BUST 1
+console.log('CACHE_BUST_2');
