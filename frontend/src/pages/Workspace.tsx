@@ -8,6 +8,7 @@ import api from '../api';
 import Participants from '../components/Participants';
 import VideoCall from '../components/VideoCall';
 import AIChat from '../components/AIChat';
+import PortForwarder from '../components/PortForwarder';
 
 const Workspace = () => {
   const { sessionId } = useParams();
@@ -152,8 +153,14 @@ const Workspace = () => {
           </div>
 
           {/* Terminal Area */}
-          <div className="flex-1 border-t-2 border-indigo-500/20 min-h-[250px] relative z-10 bg-[#0a0f1c] p-1 shadow-[0_-10px_30px_rgba(0,0,0,0.3)]">
-             <Terminal sessionId={sessionId!} containerId={session?.containerId} onFileOpen={handleFileSelect} />
+          <div className="flex-1 border-t-2 border-indigo-500/20 min-h-[250px] relative z-10 bg-[#0a0f1c] shadow-[0_-10px_30px_rgba(0,0,0,0.3)] flex flex-col">
+             <div className="flex justify-between items-center px-4 py-1.5 bg-slate-900 border-b border-white/5 flex-shrink-0">
+                <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">Terminal</span>
+                <PortForwarder sessionId={sessionId!} />
+             </div>
+             <div className="flex-1 overflow-hidden p-1">
+                <Terminal sessionId={sessionId!} containerId={session?.containerId} onFileOpen={handleFileSelect} />
+             </div>
           </div>
         </main>
 
