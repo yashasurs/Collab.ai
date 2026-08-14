@@ -10,8 +10,10 @@ const Participants = ({ sessionId }: { sessionId: string }) => {
   const [participants, setParticipants] = useState<Participant[]>([]);
 
   useEffect(() => {
-    const socket = socketio(import.meta.env.VITE_SOCKET_URL || '', {
-      query: { sessionId }
+    const socket = socketio(import.meta.env.VITE_SOCKET_URL || '');
+
+    socket.on('connect', () => {
+      socket.emit('join-session', { sessionId });
     });
 
     socket.on('participants-update', (list: Participant[]) => {

@@ -12,8 +12,10 @@ const VideoCall = ({ sessionId, username }: { sessionId: string, username: strin
       const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       setStream(s);
 
-      socketRef.current = socketio(import.meta.env.VITE_SOCKET_URL || '', {
-        query: { sessionId, username }
+      socketRef.current = socketio(import.meta.env.VITE_SOCKET_URL || '');
+
+      socketRef.current.on('connect', () => {
+        socketRef.current.emit('join-session', { sessionId, username });
       });
 
       socketRef.current.on('webrtc-offer', async ({ from, offer }: any) => {

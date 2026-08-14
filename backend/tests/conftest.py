@@ -25,7 +25,6 @@ os.environ["OPENAI_API_KEY"] = ""
 
 from app.database.database import Base, get_db, engine
 from app.models.models import User, Session, Participant, Snapshot
-from app.models.rbac import Organization, Team, Role, Permission, UserOrganization, UserTeam
 from app.auth.security import get_password_hash, create_access_token
 from app.main import app
 

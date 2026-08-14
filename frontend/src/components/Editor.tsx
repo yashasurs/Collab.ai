@@ -57,7 +57,9 @@ const CodeEditor = ({ sessionId, initialCode = '', filePath = '', onSave }: Code
     });
     socketRef.current = socket;
 
-    socket.emit('join-session', { sessionId });
+    socket.on('connect', () => {
+      socket.emit('join-session', { sessionId });
+    });
 
     socket.on('editor-sync', (data: any) => {
       if (data.sessionId === sessionId) {
