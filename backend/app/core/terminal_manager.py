@@ -28,13 +28,19 @@ class TerminalManager:
             sock = self.client.api.exec_start(exec_id['Id'], detach=False, tty=True, stream=True, socket=True)
             self.active_terminals[sid] = {"sock": sock, "exec_id": exec_id['Id']}
 
+            # Disable timeout on the underlying socket to prevent urllib3 from closing it
+            try:
+                if hasattr(sock, '_sock'):
+                    sock._sock.settimeout(None)
+                elif hasattr(sock, 'settimeout'):
+                    sock.settimeout(None)
+            except Exception:
+                pass
+
             loop = asyncio.get_running_loop()
             # Run reading in a separate thread to not block event loop
             def read_from_socket():
                 try:
-                    # Docker socket returns raw stream
-                    # We need to skip the 8-byte header if not using TTY, 
-                    # but with TTY=True, it should be a raw stream.
                     while sid in self.active_terminals:
                         data = sock.read(4096)
                         if not data:
