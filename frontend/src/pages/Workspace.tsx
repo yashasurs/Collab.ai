@@ -165,7 +165,7 @@ const Workspace = () => {
         </main>
 
         {/* Right Sidebar: AI Chat */}
-        <aside className={`bg-slate-900/50 flex-shrink-0 flex flex-col border-white/5 shadow-2xl z-10 transition-all duration-300 ease-in-out ${isAiChatOpen ? 'w-80 border-l opacity-100' : 'w-0 border-none opacity-0 overflow-hidden'}`}>
+        <aside className={`bg-slate-900/50 flex-shrink-0 flex flex-col z-10 transition-all duration-300 ease-in-out ${isAiChatOpen ? 'w-80 border-l border-white/5 opacity-100 shadow-2xl' : 'w-0 border-none opacity-0 overflow-hidden shadow-none'}`}>
           <div className="w-80 h-full flex flex-col">
             <AIChat activeFileName={currentFile} activeFileContent={fileContent} />
           </div>

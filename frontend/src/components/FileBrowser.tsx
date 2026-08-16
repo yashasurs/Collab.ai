@@ -56,40 +56,32 @@ const FileBrowser = ({ containerId, onFileSelect }: FileBrowserProps) => {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', borderRight: '1px solid var(--border-color)', padding: '1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-        <h4 style={{ margin: 0 }}>Files</h4>
+    <div className="flex flex-col h-full p-4 text-slate-300">
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="m-0 text-sm font-bold uppercase tracking-wider text-slate-400">Files</h4>
         {currentPath !== '/' && (
-          <button onClick={goBack} style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', fontSize: '0.8rem' }}>
+          <button 
+            onClick={goBack} 
+            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium bg-transparent border-none cursor-pointer"
+          >
             ← Back
           </button>
         )}
       </div>
-      <div style={{ overflowY: 'auto', flex: 1 }}>
+      <div className="overflow-y-auto flex-1 custom-scrollbar -mx-2 px-2">
         {loading ? (
-          <div style={{ opacity: 0.5, fontSize: '0.8rem' }}>Loading...</div>
+          <div className="opacity-50 text-xs">Loading...</div>
+        ) : files.length === 0 ? (
+          <div className="opacity-50 text-xs italic">No files found</div>
         ) : (
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          <ul className="list-none p-0 m-0 space-y-1">
             {files.map((file) => (
               <li 
                 key={file.path}
                 onClick={() => handleItemClick(file)}
-                style={{
-                  padding: '0.5rem',
-                  cursor: 'pointer',
-                  borderRadius: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem',
-                  fontSize: '0.9rem',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                className="p-2 cursor-pointer rounded-md flex items-center gap-3 text-sm overflow-hidden text-ellipsis whitespace-nowrap hover:bg-white/5 transition-colors"
               >
-                <span>{file.isDir ? '📁' : '📄'}</span>
+                <span className="text-lg opacity-80">{file.isDir ? '📁' : '📄'}</span>
                 <span>{file.name}</span>
               </li>
             ))}
