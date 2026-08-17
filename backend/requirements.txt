@@ -35,3 +35,4 @@ langchain-openai
 # Testing
 pytest
 pytest-asyncio
+kubernetes

@@ -4,11 +4,24 @@ import { useAuth } from '../context/AuthContext';
 import LabSelector from '../components/LabSelector';
 import api from '../api';
 
+interface Participant {
+  userId: string;
+  username: string;
+}
+
+interface Session {
+  id: string;
+  osType: string;
+  participants: Participant[];
+}
+
 const Dashboard = () => {
   const { user, logout } = useAuth();
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [showSelector, setShowSelector] = useState(false);
+  const [joinSessionId, setJoinSessionId] = useState('');
+  const [joinError, setJoinError] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,9 +44,25 @@ const Dashboard = () => {
     navigate('/');
   };
 
-  const onSessionCreated = (newSession: any) => {
+  const onSessionCreated = (newSession: { id: string; containerId: string; osType: string; snapshotId: string | null }) => {
     setShowSelector(false);
     navigate(`/workspace/${newSession.id}`);
+  };
+
+  const handleJoinSession = async () => {
+    if (!joinSessionId.trim()) return;
+    setJoinError('');
+    try {
+      const res = await api.post(`/sessions/${joinSessionId.trim()}/join`, {
+        userId: user?.id || user?.username || 'unknown',
+        username: user?.username || 'Anonymous',
+      });
+      if (res.data.success) {
+        navigate(`/workspace/${joinSessionId.trim()}`);
+      }
+    } catch (err) {
+      setJoinError((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || 'Failed to join session. Make sure the ID is correct.');
+    }
   };
 
   if (loadingData) {
@@ -96,9 +125,27 @@ const Dashboard = () => {
           </div>
           
           {/* General info space */}
-          <div className="bg-slate-900/60 backdrop-blur-xl p-8 rounded-3xl border border-white/5 flex flex-col col-span-1 md:col-span-2 items-center justify-center text-slate-500 text-center">
-            <div className="text-5xl mb-4">🚀</div>
-            <p className="text-lg">Select a session above to jump into your workspace or create a new Linux container right in the browser.</p>
+          <div className="bg-slate-900/60 backdrop-blur-xl p-8 rounded-3xl border border-white/5 flex flex-col col-span-1 md:col-span-2 justify-center">
+            <h3 className="mb-4 text-slate-200 font-bold text-xl">Join Existing Session</h3>
+            <p className="text-slate-400 text-sm mb-6">Enter a Session ID to collaborate with your team.</p>
+            
+            <div className="flex gap-4">
+              <input 
+                type="text" 
+                placeholder="Enter Session ID..." 
+                value={joinSessionId}
+                onChange={(e) => setJoinSessionId(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleJoinSession()}
+                className="flex-1 bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
+              />
+              <button 
+                onClick={handleJoinSession}
+                className="px-8 py-3 rounded-xl bg-pink-600 hover:bg-pink-500 text-white font-bold transition-all shadow-lg shadow-pink-600/30 transform hover:-translate-y-1"
+              >
+                Join
+              </button>
+            </div>
+            {joinError && <p className="text-red-400 text-sm mt-3">{joinError}</p>}
           </div>
         </div>
 
@@ -122,7 +169,7 @@ const Dashboard = () => {
                   <div className="flex items-center gap-2 mb-6">
                     <div className="text-slate-400 text-sm">Participants:</div>
                     <div className="flex -space-x-2">
-                       {(session.participants || []).slice(0,3).map((p: any) => (
+                       {(session.participants || []).slice(0,3).map((p: Participant) => (
                          <div key={p.userId} className="w-8 h-8 rounded-full bg-slate-700 border-2 border-slate-900 flex items-center justify-center text-xs font-bold" title={p.username}>
                            {p.username.charAt(0).toUpperCase()}
                          </div>

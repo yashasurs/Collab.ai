@@ -9,11 +9,12 @@ import Participants from '../components/Participants';
 import VideoCall from '../components/VideoCall';
 import AIChat from '../components/AIChat';
 import PortForwarder from '../components/PortForwarder';
+import { SocketProvider } from '../contexts/SocketContext';
 
 const Workspace = () => {
   const { sessionId } = useParams();
   const { user } = useAuth();
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<{ id: string; osType: string; containerId: string | undefined } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [fileContent, setFileContent] = useState<string>('');
@@ -39,7 +40,7 @@ const Workspace = () => {
   const handleFileSelect = async (path: string) => {
 
     try {
-      const res = await api.get(`/containers/${session.containerId}/files/read`, {
+      const res = await api.get(`/containers/${session?.containerId}/files/read`, {
         params: { path }
       });
       if (res.data.success) {
@@ -93,14 +94,14 @@ const Workspace = () => {
         </div>
         <div className="flex items-center gap-4">
           <span className="text-slate-400 text-sm font-medium hidden sm:block">{user?.username}</span>
-          <button 
+          <button
             onClick={() => setIsAiChatOpen(!isAiChatOpen)}
             className={`px-3 py-1.5 text-sm rounded-lg font-semibold transition-colors flex items-center gap-2 ${isAiChatOpen ? 'bg-pink-500 text-white shadow-sm shadow-pink-500/20' : 'bg-pink-500/10 text-pink-400 hover:bg-pink-500/20 border border-pink-500/20'}`}
           >
             <span className={`w-2 h-2 rounded-full ${isAiChatOpen ? 'bg-white' : 'bg-pink-500 animate-pulse'}`}></span>
             AI Chat
           </button>
-          <button 
+          <button
             onClick={async () => {
               const name = prompt("Enter snapshot name:", `Snapshot ${new Date().toLocaleString()}`);
               if (!name) return;
@@ -118,7 +119,7 @@ const Workspace = () => {
                 alert("Failed to save snapshot.");
               }
             }}
-            className="px-4 py-1.5 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors shadow-sm shadow-indigo-600/20" 
+            className="px-4 py-1.5 text-sm rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors shadow-sm shadow-indigo-600/20"
           >
             Save Snapshot
           </button>
@@ -129,48 +130,50 @@ const Workspace = () => {
       </nav>
 
       {/* Workspace Area */}
-      <div className="flex flex-1 overflow-hidden bg-[#0d1322]">
-        {/* Left Sidebar: File Browser & Collaboration */}
-        <aside className="w-72 bg-slate-900/50 flex-shrink-0 flex flex-col border-r border-white/5 shadow-2xl z-10 transition-all">
-          <div className="flex-1 overflow-y-auto w-full custom-scrollbar">
-            <FileBrowser containerId={session?.containerId} onFileSelect={handleFileSelect} />
-          </div>
-          <div className="p-4 border-t border-white/5 bg-slate-900 shadow-[0_-4px_12px_rgba(0,0,0,0.2)]">
-            <Participants sessionId={sessionId!} />
-            <VideoCall sessionId={sessionId!} username={user?.username || 'Anonymous'} />
-          </div>
-        </aside>
+      <SocketProvider sessionId={sessionId!} username={user?.username || 'Anonymous'}>
+        <div className="flex flex-1 overflow-hidden bg-[#0d1322]">
+          {/* Left Sidebar: File Browser & Collaboration */}
+          <aside className="w-72 bg-slate-900/50 flex-shrink-0 flex flex-col border-r border-white/5 shadow-2xl z-10 transition-all">
+            <div className="flex-1 overflow-y-auto w-full custom-scrollbar">
+              <FileBrowser containerId={session?.containerId} onFileSelect={handleFileSelect} />
+            </div>
+            <div className="p-4 border-t border-white/5 bg-slate-900 shadow-[0_-4px_12px_rgba(0,0,0,0.2)]">
+              <Participants />
+              <VideoCall />
+            </div>
+          </aside>
 
-        {/* Main Content: Split Editor and Terminal */}
-        <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
-          <div className="absolute inset-0 bg-indigo-500/5 pointer-events-none blur-3xl opacity-30"></div>
-          
-          {/* Editor Area */}
-          <div className="flex-[2] overflow-hidden p-1 relative z-0">
-             <div className="w-full h-full rounded-b-none border-b-0 overflow-hidden shadow-2xl">
-               <CodeEditor sessionId={sessionId!} initialCode={fileContent} filePath={currentFile} onSave={handleSaveFile} />
-             </div>
-          </div>
+          {/* Main Content: Split Editor and Terminal */}
+          <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
+            <div className="absolute inset-0 bg-indigo-500/5 pointer-events-none blur-3xl opacity-30"></div>
 
-          {/* Terminal Area */}
-          <div className="flex-1 border-t-2 border-indigo-500/20 min-h-[250px] relative z-10 bg-[#0a0f1c] shadow-[0_-10px_30px_rgba(0,0,0,0.3)] flex flex-col">
-             <div className="flex justify-between items-center px-4 py-1.5 bg-slate-900 border-b border-white/5 flex-shrink-0">
+            {/* Editor Area */}
+            <div className="flex-[2] overflow-hidden p-1 relative z-0">
+              <div className="w-full h-full rounded-b-none border-b-0 overflow-hidden shadow-2xl">
+                <CodeEditor sessionId={sessionId!} initialCode={fileContent} filePath={currentFile} onSave={handleSaveFile} />
+              </div>
+            </div>
+
+            {/* Terminal Area */}
+            <div className="flex-1 border-t-2 border-indigo-500/20 min-h-[250px] relative z-10 bg-[#0a0f1c] shadow-[0_-10px_30px_rgba(0,0,0,0.3)] flex flex-col">
+              <div className="flex justify-between items-center px-4 py-1.5 bg-slate-900 border-b border-white/5 flex-shrink-0">
                 <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">Terminal</span>
                 <PortForwarder sessionId={sessionId!} />
-             </div>
-             <div className="flex-1 overflow-hidden p-1">
-                <Terminal sessionId={sessionId!} containerId={session?.containerId} onFileOpen={handleFileSelect} />
-             </div>
-          </div>
-        </main>
+              </div>
+              <div className="flex-1 overflow-hidden p-1">
+                <Terminal containerId={session?.containerId} onFileOpen={handleFileSelect} />
+              </div>
+            </div>
+          </main>
 
-        {/* Right Sidebar: AI Chat */}
-        <aside className={`bg-slate-900/50 flex-shrink-0 flex flex-col z-10 transition-all duration-300 ease-in-out ${isAiChatOpen ? 'w-80 border-l border-white/5 opacity-100 shadow-2xl' : 'w-0 border-none opacity-0 overflow-hidden shadow-none'}`}>
-          <div className="w-80 h-full flex flex-col">
-            <AIChat activeFileName={currentFile} activeFileContent={fileContent} />
-          </div>
-        </aside>
-      </div>
+          {/* Right Sidebar: AI Chat */}
+          <aside className={`bg-slate-900/50 flex-shrink-0 flex flex-col z-10 transition-all duration-300 ease-in-out ${isAiChatOpen ? 'w-80 border-l border-white/5 opacity-100 shadow-2xl' : 'w-0 border-none opacity-0 overflow-hidden shadow-none'}`}>
+            <div className="w-80 h-full flex flex-col">
+              <AIChat activeFileName={currentFile} activeFileContent={fileContent} />
+            </div>
+          </aside>
+        </div>
+      </SocketProvider>
     </div>
   );
 };

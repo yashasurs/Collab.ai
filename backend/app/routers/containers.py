@@ -37,7 +37,7 @@ async def create_container(req: CreateContainerRequest, current_user: User = Dep
 
 
 @router.get("/{container_id}")
-async def get_container(container_id: str):
+async def get_container(container_id: str, current_user: User = Depends(get_current_user)):
     """Get container information."""
     try:
         info = await orchestrator.get(container_id)
@@ -63,7 +63,7 @@ async def remove_container(container_id: str, current_user: User = Depends(get_c
 
 
 @router.post("/{container_id}/exec")
-async def exec_command(container_id: str, req: ExecCommandRequest):
+async def exec_command(container_id: str, req: ExecCommandRequest, current_user: User = Depends(get_current_user)):
     """Execute a command inside a container."""
     try:
         result = await orchestrator.exec(container_id, req.command)
@@ -77,7 +77,7 @@ async def exec_command(container_id: str, req: ExecCommandRequest):
 
 
 @router.post("/{container_id}/snapshot")
-async def snapshot_container(container_id: str, req: SnapshotContainerRequest):
+async def snapshot_container(container_id: str, req: SnapshotContainerRequest, current_user: User = Depends(get_current_user)):
     """Create a snapshot of the container's current state."""
     try:
         info = await orchestrator.snapshot(container_id, req.name, req.description or "")
@@ -92,7 +92,7 @@ async def snapshot_container(container_id: str, req: SnapshotContainerRequest):
 
 
 @router.get("/{container_id}/files")
-async def list_files(container_id: str, path: str = "/"):
+async def list_files(container_id: str, path: str = "/", current_user: User = Depends(get_current_user)):
     """List files in a directory inside the container."""
     try:
         files = await orchestrator.list_files(container_id, path)
@@ -108,7 +108,7 @@ async def list_files(container_id: str, path: str = "/"):
 
 
 @router.get("/{container_id}/files/read")
-async def read_file(container_id: str, path: str):
+async def read_file(container_id: str, path: str, current_user: User = Depends(get_current_user)):
     """Read a file from inside the container."""
     try:
         content = await orchestrator.read_file(container_id, path)
@@ -118,7 +118,7 @@ async def read_file(container_id: str, path: str):
 
 
 @router.post("/{container_id}/files/write")
-async def write_file(container_id: str, req: WriteFileRequest):
+async def write_file(container_id: str, req: WriteFileRequest, current_user: User = Depends(get_current_user)):
     """Write content to a file inside the container."""
     try:
         await orchestrator.write_file(container_id, req.path, req.content)

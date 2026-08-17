@@ -1,6 +1,6 @@
 import Editor from '@monaco-editor/react';
 import { useEffect, useRef, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
+import { useSocket } from '../contexts/SocketContext';
 
 interface CodeEditorProps {
   sessionId: string;
@@ -39,7 +39,6 @@ const getLanguageFromPath = (path: string) => {
 const CodeEditor = ({ sessionId, initialCode = '', filePath = '', onSave }: CodeEditorProps) => {
   const [code, setCode] = useState(initialCode);
   const [language, setLanguage] = useState(getLanguageFromPath(filePath));
-  const socketRef = useRef<Socket | null>(null);
   const isRemoteChange = useRef(false);
 
   // Sync state when initialCode changes (e.g. user selects a different file)
@@ -51,17 +50,14 @@ const CodeEditor = ({ sessionId, initialCode = '', filePath = '', onSave }: Code
     setLanguage(getLanguageFromPath(filePath));
   }, [filePath]);
 
+  const { socket, isConnected } = useSocket();
+
   useEffect(() => {
-    const socket = io(import.meta.env.VITE_SOCKET_URL || '', {
-        transports: ['websocket'],
-    });
-    socketRef.current = socket;
+    if (!socket || !isConnected) return;
 
-    socket.on('connect', () => {
-      socket.emit('join-session', { sessionId });
-    });
+    if (!socket || !isConnected) return;
 
-    socket.on('editor-sync', (data: any) => {
+    socket.on('editor-sync', (data: { sessionId: string; content: string }) => {
       if (data.sessionId === sessionId) {
         isRemoteChange.current = true;
         setCode(data.content);
@@ -69,22 +65,25 @@ const CodeEditor = ({ sessionId, initialCode = '', filePath = '', onSave }: Code
     });
 
     return () => {
-      socket.disconnect();
+      socket.off('editor-sync');
     };
-  }, [sessionId]);
+  }, [socket, isConnected, sessionId]);
 
   const handleEditorChange = (value: string | undefined) => {
     const newContent = value || '';
     if (!isRemoteChange.current) {
       setCode(newContent);
-      socketRef.current?.emit('editor-change', {
-        sessionId,
-        content: newContent,
-      });
+      if (socket && isConnected) {
+        socket.emit('editor-change', {
+          sessionId,
+          content: newContent,
+        });
+      }
     }
     isRemoteChange.current = false;
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleEditorDidMount = (editor: any, monaco: any) => {
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       // We pass the current value directly from the editor instance to ensure we have the latest

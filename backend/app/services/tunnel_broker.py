@@ -92,6 +92,7 @@ class TunnelBroker:
         session_id: str,
         user_id: str,
         local_port: int = 8080,
+        container_ip: str = "127.0.0.1",
     ) -> TunnelInfo:
         """Create a new cloudflared tunnel with quota enforcement."""
 
@@ -109,7 +110,7 @@ class TunnelBroker:
             )
 
         # Start cloudflared process
-        local_url = f"http://localhost:{local_port}"
+        local_url = f"http://{container_ip}:{local_port}"
         try:
             proc = subprocess.Popen(
                 ["cloudflared", "tunnel", "--url", local_url],

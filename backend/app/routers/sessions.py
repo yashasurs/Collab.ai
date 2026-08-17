@@ -4,8 +4,9 @@ import uuid
 import datetime
 
 from app.database.database import get_db
-from app.models.models import Session, Participant
 from app.schemas.schemas import CreateSessionRequest, ParticipantCreate
+from app.auth.dependencies import get_current_user
+from app.models.models import Session, Participant, User
 
 
 router = APIRouter()
@@ -24,8 +25,8 @@ OS_OPTIONS = [
 
 @router.get("")
 @router.get("/")
-async def list_sessions(db: DBSession = Depends(get_db)):
-    db_sessions = db.query(Session).all()
+async def list_sessions(current_user: User = Depends(get_current_user), db: DBSession = Depends(get_db)):
+    db_sessions = db.query(Session).join(Participant).filter(Participant.user_id == current_user.id).all()
     return [_session_to_dict(s) for s in db_sessions]
 
 
@@ -35,7 +36,11 @@ async def get_os_options():
 
 
 @router.post("/create")
-def create_session(req: CreateSessionRequest, db: DBSession = Depends(get_db)):
+def create_session(req: CreateSessionRequest, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    active_sessions = db.query(Participant).filter(Participant.user_id == current_user.id).count()
+    if active_sessions >= 3:
+        raise HTTPException(status_code=429, detail="Session quota exceeded (Max 3)")
+
     session_id = str(uuid.uuid4())
 
     db_session = Session(
@@ -61,7 +66,7 @@ def create_session(req: CreateSessionRequest, db: DBSession = Depends(get_db)):
 
 
 @router.get("/{session_id}")
-async def get_session(session_id: str, db: DBSession = Depends(get_db)):
+async def get_session(session_id: str, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_session = db.query(Session).filter(Session.id == session_id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -69,7 +74,7 @@ async def get_session(session_id: str, db: DBSession = Depends(get_db)):
 
 
 @router.post("/{session_id}/join")
-async def join_session(session_id: str, participant: ParticipantCreate, db: DBSession = Depends(get_db)):
+async def join_session(session_id: str, participant: ParticipantCreate, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_session = db.query(Session).filter(Session.id == session_id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -87,7 +92,7 @@ async def join_session(session_id: str, participant: ParticipantCreate, db: DBSe
 
 
 @router.patch("/{session_id}")
-async def update_session(session_id: str, container_id: str, db: DBSession = Depends(get_db)):
+async def update_session(session_id: str, container_id: str, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_session = db.query(Session).filter(Session.id == session_id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -97,7 +102,7 @@ async def update_session(session_id: str, container_id: str, db: DBSession = Dep
 
 
 @router.delete("/{session_id}")
-async def delete_session(session_id: str, db: DBSession = Depends(get_db)):
+async def delete_session(session_id: str, db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_session = db.query(Session).filter(Session.id == session_id).first()
     if not db_session:
         raise HTTPException(status_code=404, detail="Session not found")

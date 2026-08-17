@@ -24,8 +24,8 @@ const Register = () => {
 
       // After successful registration, navigate to login or auto-login
       navigate('/login');
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Registration failed. Username or email might be taken.');
+    } catch (err) {
+      setError((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || 'Registration failed. Please try again.');
     } finally {
       setLoading(false);
     }

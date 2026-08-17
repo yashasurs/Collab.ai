@@ -182,7 +182,6 @@ async def handle_join_session(sid, data):
 
     session_id = data.get("sessionId")
     username = data.get("username", "Anonymous")
-    container_id = data.get("containerId")
 
     await sio.enter_room(sid, session_id)
 
@@ -194,6 +193,10 @@ async def handle_join_session(sid, data):
     await sio.emit("participants-update", participants, room=session_id)
     await sio.emit("user-joined-webrtc", sid, room=session_id, skip_sid=sid)
 
+
+@sio.on("start-terminal")
+async def handle_start_terminal(sid, data):
+    container_id = data.get("containerId")
     if container_id:
         async def on_terminal_data(target_sid, output_data):
             await sio.emit("terminal-data", output_data.decode(errors='replace'), to=target_sid)

@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/", response_model=List[SnapshotOut])
-async def list_snapshots(db: DBSession = Depends(get_db)):
+async def list_snapshots(db: DBSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """List all available snapshots."""
     snapshots = db.query(Snapshot).all()
     return [

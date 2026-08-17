@@ -1,29 +1,27 @@
 import { useState, useEffect } from 'react';
-import socketio from 'socket.io-client';
+import { useSocket } from '../contexts/SocketContext';
 
 interface Participant {
   socketId: string;
   username?: string;
 }
 
-const Participants = ({ sessionId }: { sessionId: string }) => {
+const Participants = () => {
   const [participants, setParticipants] = useState<Participant[]>([]);
 
-  useEffect(() => {
-    const socket = socketio(import.meta.env.VITE_SOCKET_URL || '');
+  const { socket, isConnected } = useSocket();
 
-    socket.on('connect', () => {
-      socket.emit('join-session', { sessionId });
-    });
+  useEffect(() => {
+    if (!socket || !isConnected) return;
 
     socket.on('participants-update', (list: Participant[]) => {
       setParticipants(list);
     });
 
     return () => {
-      socket.disconnect();
+      socket.off('participants-update');
     };
-  }, [sessionId]);
+  }, [socket, isConnected]);
 
   return (
     <div className="glass-panel" style={{ padding: '1rem', marginBottom: '1rem' }}>

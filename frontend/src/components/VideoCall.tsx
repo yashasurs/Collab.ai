@@ -1,87 +1,103 @@
 import { useEffect, useRef, useState } from 'react';
-import socketio from 'socket.io-client';
+import { useSocket } from '../contexts/SocketContext';
 
-const VideoCall = ({ sessionId, username }: { sessionId: string, username: string }) => {
+const VideoCall = () => {
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const pcs = useRef<Record<string, RTCPeerConnection>>({});
-  const socketRef = useRef<any>(null);
+  const { socket, isConnected } = useSocket();
 
   useEffect(() => {
     const init = async () => {
-      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      setStream(s);
-
-      socketRef.current = socketio(import.meta.env.VITE_SOCKET_URL || '');
-
-      socketRef.current.on('connect', () => {
-        socketRef.current.emit('join-session', { sessionId, username });
-      });
-
-      socketRef.current.on('webrtc-offer', async ({ from, offer }: any) => {
-        const pc = createPeerConnection(from);
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        socketRef.current.emit('webrtc-answer', { to: from, answer });
-      });
-
-      socketRef.current.on('webrtc-answer', async ({ from, answer }: any) => {
-        const pc = pcs.current[from];
-        if (pc) {
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
-        }
-      });
-
-      socketRef.current.on('webrtc-ice-candidate', async ({ from, candidate }: any) => {
-        const pc = pcs.current[from];
-        if (pc) {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        }
-      });
-
-      socketRef.current.on('user-joined-webrtc', (userId: string) => {
-        callUser(userId);
-      });
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        setStream(s);
+        streamRef.current = s;
+      } catch (err) {
+        console.error("Failed to get user media", err);
+      }
     };
-
     init();
 
+    const currentPcs = pcs.current;
     return () => {
-      stream?.getTracks().forEach(t => t.stop());
-      Object.values(pcs.current).forEach(pc => pc.close());
-      socketRef.current?.disconnect();
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      Object.values(currentPcs).forEach(pc => pc.close());
     };
-  }, [sessionId]);
+  }, []);
 
-  const createPeerConnection = (userId: string) => {
-    const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-    });
+  useEffect(() => {
+    if (!socket || !isConnected) return;
 
-    pcs.current[userId] = pc;
+    const createPeerConnection = (userId: string) => {
+      const pc = new RTCPeerConnection({
+        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      });
 
-    stream?.getTracks().forEach(track => pc.addTrack(track, stream));
+      pcs.current[userId] = pc;
 
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        socketRef.current.emit('webrtc-ice-candidate', { to: userId, candidate: event.candidate });
+      streamRef.current?.getTracks().forEach(track => {
+        if (streamRef.current) {
+           pc.addTrack(track, streamRef.current);
+        }
+      });
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate && socket) {
+          socket.emit('webrtc-ice-candidate', { to: userId, candidate: event.candidate });
+        }
+      };
+
+      pc.ontrack = (event) => {
+        setRemoteStreams(prev => ({ ...prev, [userId]: event.streams[0] }));
+      };
+
+      return pc;
+    };
+
+    const callUser = async (userId: string) => {
+      const pc = createPeerConnection(userId);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      if (socket) {
+          socket.emit('webrtc-offer', { to: userId, offer });
       }
     };
 
-    pc.ontrack = (event) => {
-      setRemoteStreams(prev => ({ ...prev, [userId]: event.streams[0] }));
+    socket.on('webrtc-offer', async ({ from, offer }: { from: string; offer: RTCSessionDescriptionInit }) => {
+      const pc = createPeerConnection(from);
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit('webrtc-answer', { to: from, answer });
+    });
+
+    socket.on('webrtc-answer', async ({ from, answer }: { from: string; answer: RTCSessionDescriptionInit }) => {
+      const pc = pcs.current[from];
+      if (pc) {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    });
+
+    socket.on('webrtc-ice-candidate', async ({ from, candidate }: { from: string; candidate: RTCIceCandidateInit }) => {
+      const pc = pcs.current[from];
+      if (pc) {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      }
+    });
+
+    socket.on('user-joined-webrtc', (userId: string) => {
+      callUser(userId);
+    });
+
+    return () => {
+      socket.off('webrtc-offer');
+      socket.off('webrtc-answer');
+      socket.off('webrtc-ice-candidate');
+      socket.off('user-joined-webrtc');
     };
-
-    return pc;
-  };
-
-  const callUser = async (userId: string) => {
-    const pc = createPeerConnection(userId);
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socketRef.current.emit('webrtc-offer', { to: userId, offer });
-  };
+  }, [socket, isConnected]);
 
   return (
     <div className="glass-panel" style={{ padding: '1rem', marginTop: '1rem' }}>

@@ -10,6 +10,10 @@ import logging
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
+import io
+import os
+import tarfile
+import asyncio
 import docker
 from docker.errors import NotFound, APIError, ImageNotFound
 
@@ -57,6 +61,13 @@ class DockerOrchestrator(ContainerOrchestrator):
         if self._client is None:
             raise RuntimeError("Docker daemon is not available")
 
+    async def _run_in_thread(self, func, *args, **kwargs):
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            _executor, 
+            lambda: func(*args, **kwargs)
+        )
+
     async def create(
         self,
         image: str,
@@ -76,7 +87,8 @@ class DockerOrchestrator(ContainerOrchestrator):
                 resolved_image = OS_IMAGE_MAP[image]
 
         try:
-            container = self._client.containers.run(
+            container = await self._run_in_thread(
+                self._client.containers.run,
                 image=resolved_image,
                 detach=True,
                 tty=True,
@@ -91,11 +103,20 @@ class DockerOrchestrator(ContainerOrchestrator):
             # Install edit command
             await self.setup_edit_command(container.id)
 
+            await self._run_in_thread(container.reload)
+            ip_address = container.attrs.get("NetworkSettings", {}).get("IPAddress")
+            if not ip_address:
+                # fallback for some network setups
+                networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
+                if networks:
+                    ip_address = list(networks.values())[0].get("IPAddress")
+
             return ContainerInfo(
                 id=container.id,
                 status=container.status,
                 image=resolved_image,
                 labels=container.labels,
+                ip_address=ip_address,
             )
         except ImageNotFound:
             raise RuntimeError(f"Image '{resolved_image}' not found. Build the OS images first.")
@@ -105,12 +126,19 @@ class DockerOrchestrator(ContainerOrchestrator):
     async def get(self, container_id: str) -> ContainerInfo:
         self._ensure_client()
         try:
-            container = self._client.containers.get(container_id)
+            container = await self._run_in_thread(self._client.containers.get, container_id)
+            ip_address = container.attrs.get("NetworkSettings", {}).get("IPAddress")
+            if not ip_address:
+                networks = container.attrs.get("NetworkSettings", {}).get("Networks", {})
+                if networks:
+                    ip_address = list(networks.values())[0].get("IPAddress")
+
             return ContainerInfo(
                 id=container.id,
                 status=container.status,
                 image=str(container.image.tags),
                 labels=container.labels,
+                ip_address=ip_address,
             )
         except NotFound:
             raise RuntimeError(f"Container {container_id} not found")
@@ -118,9 +146,9 @@ class DockerOrchestrator(ContainerOrchestrator):
     async def remove(self, container_id: str) -> bool:
         self._ensure_client()
         try:
-            container = self._client.containers.get(container_id)
-            container.stop(timeout=5)
-            container.remove()
+            container = await self._run_in_thread(self._client.containers.get, container_id)
+            await self._run_in_thread(container.stop, timeout=5)
+            await self._run_in_thread(container.remove)
             return True
         except NotFound:
             raise RuntimeError(f"Container {container_id} not found")
@@ -130,8 +158,9 @@ class DockerOrchestrator(ContainerOrchestrator):
     async def exec(self, container_id: str, command: str) -> ExecResult:
         self._ensure_client()
         try:
-            container = self._client.containers.get(container_id)
-            exit_code, output = container.exec_run(
+            container = await self._run_in_thread(self._client.containers.get, container_id)
+            exit_code, output = await self._run_in_thread(
+                container.exec_run,
                 cmd=["sh", "-c", command],
                 stream=False,
                 demux=False,
@@ -148,8 +177,8 @@ class DockerOrchestrator(ContainerOrchestrator):
     async def list_files(self, container_id: str, path: str = "/") -> list[FileInfo]:
         self._ensure_client()
         try:
-            container = self._client.containers.get(container_id)
-            exit_code, output = container.exec_run(f"ls -F {path}")
+            container = await self._run_in_thread(self._client.containers.get, container_id)
+            exit_code, output = await self._run_in_thread(container.exec_run, ["ls", "-F", path])
             if exit_code != 0:
                 return []
 
@@ -170,8 +199,8 @@ class DockerOrchestrator(ContainerOrchestrator):
     async def read_file(self, container_id: str, path: str) -> str:
         self._ensure_client()
         try:
-            container = self._client.containers.get(container_id)
-            exit_code, output = container.exec_run(f"cat {path}")
+            container = await self._run_in_thread(self._client.containers.get, container_id)
+            exit_code, output = await self._run_in_thread(container.exec_run, ["cat", path])
             if exit_code != 0:
                 raise RuntimeError(f"File not found or unreadable: {path}")
             return output.decode(errors="replace")
@@ -181,12 +210,25 @@ class DockerOrchestrator(ContainerOrchestrator):
     async def write_file(self, container_id: str, path: str, content: str) -> bool:
         self._ensure_client()
         try:
-            container = self._client.containers.get(container_id)
-            escaped_content = content.replace("'", "'\\''")
-            cmd = f"printf '%s' '{escaped_content}' > {path}"
-            exit_code, output = container.exec_run(["sh", "-c", cmd])
-            if exit_code != 0:
-                raise RuntimeError(f"Failed to write file: {output.decode()}")
+            container = await self._run_in_thread(self._client.containers.get, container_id)
+            # Create in-memory tarball
+            tar_stream = io.BytesIO()
+            with tarfile.open(fileobj=tar_stream, mode='w') as tar:
+                file_data = content.encode('utf-8')
+                tarinfo = tarfile.TarInfo(name=os.path.basename(path))
+                tarinfo.size = len(file_data)
+                tar.addfile(tarinfo, io.BytesIO(file_data))
+                
+            tar_stream.seek(0)
+            
+            # Put archive in the container
+            success = await self._run_in_thread(
+                container.put_archive,
+                path=os.path.dirname(path) or "/",
+                data=tar_stream
+            )
+            if not success:
+                raise RuntimeError("Docker failed to extract the file archive")
             return True
         except Exception as e:
             raise RuntimeError(f"Failed to write file: {e}")
@@ -197,8 +239,9 @@ class DockerOrchestrator(ContainerOrchestrator):
         repository = f"colab-snapshot-{snapshot_id}"
 
         try:
-            container = self._client.containers.get(container_id)
-            image = container.commit(
+            container = await self._run_in_thread(self._client.containers.get, container_id)
+            image = await self._run_in_thread(
+                container.commit,
                 repository=repository,
                 tag="latest",
                 message=description,
@@ -217,10 +260,10 @@ class DockerOrchestrator(ContainerOrchestrator):
     async def setup_edit_command(self, container_id: str) -> bool:
         """Install the 'edit' helper command."""
         try:
-            container = self._client.containers.get(container_id)
+            container = await self._run_in_thread(self._client.containers.get, container_id)
             script = '#!/bin/sh\nabs_path=$(readlink -f "$1" 2>/dev/null || echo "$1")\nprintf "\\033]0;EDIT:%s\\007" "$abs_path"\n'
             cmd = f"cat << 'EOF' > /usr/bin/edit\n{script}EOF\nchmod +x /usr/bin/edit"
-            container.exec_run(["sh", "-c", cmd], user="root")
+            await self._run_in_thread(container.exec_run, ["sh", "-c", cmd], user="root")
             return True
         except Exception as e:
             logger.warning(f"Failed to install edit command: {e}")

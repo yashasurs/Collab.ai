@@ -1,7 +1,8 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import api from '../api';
 
 interface User {
+  id: number;
   username: string;
   email: string;
 }
@@ -22,7 +23,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
-  const fetchUser = async (authToken: string) => {
+  const fetchUser = useCallback(async (authToken: string) => {
     try {
       const response = await api.get('/auth/me', {
         headers: { Authorization: `Bearer ${authToken}` }
@@ -30,11 +31,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(response.data);
     } catch (error) {
       console.error("Failed to fetch user:", error);
-      logout();
+      // We can't call logout here directly without causing circular deps, 
+      // so we'll just clear state manually.
+      localStorage.removeItem('token');
+      setToken(null);
+      setUser(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (token) {
@@ -42,7 +47,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } else {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, fetchUser]);
 
   const login = async (newToken: string) => {
     localStorage.setItem('token', newToken);
@@ -57,19 +62,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      token, 
-      loading, 
-      login, 
+    <AuthContext.Provider value={{
+      user,
+      token,
+      loading,
+      login,
       logout,
-      isAuthenticated: !!token 
+      isAuthenticated: !!token
     }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

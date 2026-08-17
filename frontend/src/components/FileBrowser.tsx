@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../api';
 
 interface FileItem {
@@ -8,7 +8,7 @@ interface FileItem {
 }
 
 interface FileBrowserProps {
-  containerId: string;
+  containerId: string | undefined;
   onFileSelect: (path: string) => void;
 }
 
@@ -17,7 +17,7 @@ const FileBrowser = ({ containerId, onFileSelect }: FileBrowserProps) => {
   const [currentPath, setCurrentPath] = useState('/');
   const [loading, setLoading] = useState(true);
 
-  const fetchFiles = async (path: string) => {
+  const fetchFiles = useCallback(async (path: string) => {
     setLoading(true);
     try {
       const res = await api.get(`/containers/${containerId}/files`, {
@@ -32,13 +32,13 @@ const FileBrowser = ({ containerId, onFileSelect }: FileBrowserProps) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [containerId]);
 
   useEffect(() => {
     if (containerId) {
       fetchFiles('/');
     }
-  }, [containerId]);
+  }, [containerId, fetchFiles]);
 
   const handleItemClick = (item: FileItem) => {
     if (item.isDir) {
@@ -60,8 +60,8 @@ const FileBrowser = ({ containerId, onFileSelect }: FileBrowserProps) => {
       <div className="flex justify-between items-center mb-4">
         <h4 className="m-0 text-sm font-bold uppercase tracking-wider text-slate-400">Files</h4>
         {currentPath !== '/' && (
-          <button 
-            onClick={goBack} 
+          <button
+            onClick={goBack}
             className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium bg-transparent border-none cursor-pointer"
           >
             ← Back
@@ -76,7 +76,7 @@ const FileBrowser = ({ containerId, onFileSelect }: FileBrowserProps) => {
         ) : (
           <ul className="list-none p-0 m-0 space-y-1">
             {files.map((file) => (
-              <li 
+              <li
                 key={file.path}
                 onClick={() => handleItemClick(file)}
                 className="p-2 cursor-pointer rounded-md flex items-center gap-3 text-sm overflow-hidden text-ellipsis whitespace-nowrap hover:bg-white/5 transition-colors"

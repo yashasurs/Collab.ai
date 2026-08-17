@@ -19,7 +19,7 @@ const PortForwarder = ({ sessionId }: PortForwarderProps) => {
           setTunnelUrl(res.data.tunnelUrl);
           setPort(res.data.localPort.toString());
         }
-      } catch (err) {
+      } catch {
         // 404 means no active tunnel, which is fine
       }
     };
@@ -37,8 +37,8 @@ const PortForwarder = ({ sessionId }: PortForwarderProps) => {
       if (res.data.success) {
         setTunnelUrl(res.data.tunnelUrl);
       }
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to create tunnel");
+    } catch (err) {
+      alert((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "Failed to create tunnel");
     } finally {
       setIsLoading(false);
     }
@@ -49,8 +49,8 @@ const PortForwarder = ({ sessionId }: PortForwarderProps) => {
     try {
       await api.delete(`/tunnels/${sessionId}`);
       setTunnelUrl(null);
-    } catch (err: any) {
-      alert(err.response?.data?.detail || "Failed to stop tunnel");
+    } catch (err) {
+      alert((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || "Failed to stop tunnel");
     } finally {
       setIsLoading(false);
     }

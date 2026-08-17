@@ -11,20 +11,40 @@ import logging
 from app.schemas.schemas import CreateTunnelRequest
 from app.services.tunnel_broker import tunnel_broker
 from app.auth.dependencies import get_current_user
-from app.models.models import User
+from app.models.models import User, Session as SessionModel
+from app.database.database import get_db
+from sqlalchemy.orm import Session as DBSession
+from app.services.orchestrator.factory import orchestrator
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
 @router.post("/create")
-async def create_tunnel(req: CreateTunnelRequest, current_user: User = Depends(get_current_user)):
+async def create_tunnel(
+    req: CreateTunnelRequest, 
+    current_user: User = Depends(get_current_user),
+    db: DBSession = Depends(get_db)
+):
     """Create a tunnel with quota enforcement."""
+    session = db.query(SessionModel).filter(SessionModel.id == req.sessionId).first()
+    if not session or not session.container_id:
+        raise HTTPException(status_code=404, detail="Session or container not found")
+        
+    container_ip = "127.0.0.1"
+    try:
+        container_info = await orchestrator.get(session.container_id)
+        if container_info.ip_address:
+            container_ip = container_info.ip_address
+    except Exception as e:
+        logger.warning(f"Could not fetch container IP: {e}")
+
     try:
         info = await tunnel_broker.create_tunnel(
             session_id=req.sessionId,
             user_id=current_user.id,
             local_port=req.localPort,
+            container_ip=container_ip,
         )
         return {
             "success": True,
@@ -41,7 +61,7 @@ async def create_tunnel(req: CreateTunnelRequest, current_user: User = Depends(g
 
 
 @router.get("/")
-async def list_tunnels():
+async def list_tunnels(current_user: User = Depends(get_current_user)):
     """List all active tunnels."""
     tunnels = await tunnel_broker.list_tunnels()
     return {
@@ -76,7 +96,7 @@ async def tunnels_health():
 
 
 @router.get("/{session_id}")
-async def get_tunnel(session_id: str):
+async def get_tunnel(session_id: str, current_user: User = Depends(get_current_user)):
     """Get tunnel info for a specific session."""
     info = await tunnel_broker.get_tunnel(session_id)
     if not info:

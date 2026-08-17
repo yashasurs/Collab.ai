@@ -25,6 +25,7 @@ class ContainerInfo:
     status: str
     image: str
     labels: dict = field(default_factory=dict)
+    ip_address: Optional[str] = None
 
 
 @dataclass

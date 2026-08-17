@@ -32,8 +32,8 @@ const Login = () => {
         await login(response.data.access_token);
         navigate('/dashboard');
       }
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
+    } catch (err) {
+      setError((err as { response?: { data?: { detail?: string } } }).response?.data?.detail || 'Failed to login. Please check your credentials.');
     } finally {
       setLoading(false);
     }

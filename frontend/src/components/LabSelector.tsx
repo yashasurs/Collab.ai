@@ -9,7 +9,7 @@ interface OSOption {
 }
 
 interface LabSelectorProps {
-  onSessionCreated: (session: any) => void;
+  onSessionCreated: (session: { id: string; containerId: string; osType: string; snapshotId: string | null }) => void;
   userId: string;
   username: string;
 }
